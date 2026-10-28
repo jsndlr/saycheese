@@ -71,10 +71,11 @@ const validAudit = {
   at: 1_700_000_000_000,
 } as const;
 
-it("defines exactly the four phase-1 tables", () => {
+it("defines exactly the phase-1 tables plus the maintenance singleton", () => {
   expect(Object.keys(schema.tables).sort()).toEqual([
     "auditEvents",
     "images",
+    "maintenance",
     "scores",
     "scoringAttempts",
   ]);
@@ -117,6 +118,10 @@ it("accepts a valid row in every table", async () => {
       before: { status: "processing" },
       after: { status: "ready" },
     }),
+  );
+
+  await t.run(async (ctx) =>
+    ctx.db.insert("maintenance", { key: "storageSweep", watermark: 1_700_000_000_000 }),
   );
 
   await expect(t.run(async (ctx) => ctx.db.get(imageId))).resolves.toMatchObject({

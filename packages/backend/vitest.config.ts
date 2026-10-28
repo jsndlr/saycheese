@@ -14,14 +14,14 @@ export default defineConfig({
         test: {
           name: "node",
           include: ["test/**/*.test.ts"],
-          exclude: ["test/runtime.test.ts", "test/schema.test.ts", "test/upload.test.ts", "test/images-queries.test.ts", "test/seed.test.ts"],
+          exclude: ["test/runtime.test.ts", "test/schema.test.ts", "test/upload.test.ts", "test/images-queries.test.ts", "test/seed.test.ts", "test/storage-sweep.test.ts"],
           env: testEnv,
         },
       },
       {
         test: {
           name: "edge",
-          include: ["test/runtime.test.ts", "test/schema.test.ts", "test/upload.test.ts", "test/images-queries.test.ts", "test/seed.test.ts"],
+          include: ["test/runtime.test.ts", "test/schema.test.ts", "test/upload.test.ts", "test/images-queries.test.ts", "test/seed.test.ts", "test/storage-sweep.test.ts"],
           environment: "edge-runtime",
           env: testEnv,
           server: {

@@ -82,4 +82,11 @@ export default defineSchema({
   })
     .index("by_doc", ["docId", "at"])
     .index("by_actor", ["actorId", "at"]),
+
+  // Singleton rows for long-running maintenance jobs. `storageSweep` stores the
+  // `_creationTime` of the last `_storage` object already checked.
+  maintenance: defineTable({
+    key: v.string(),
+    watermark: v.number(),
+  }).index("by_key", ["key"]),
 });

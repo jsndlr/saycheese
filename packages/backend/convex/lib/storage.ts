@@ -6,6 +6,11 @@ import type { QueryCtx } from "../_generated/server";
  * at `_storage` is checked, not just the raw upload: the process action replaces
  * `rawStorageId` with `storageId`, `previewId` and `thumbId`, and later phases
  * (plus the orphan sweep) must never treat a live variant as an orphan.
+ *
+ * The orphan sweep only visits an object once (it advances a `_creationTime`
+ * watermark past it), so any future code that removes a reference to a stored
+ * object MUST delete that object itself. Dropping the reference alone would
+ * leave the bytes in `_storage` forever because a later sweep skips them.
  */
 export async function isStorageIdReferenced(
   ctx: QueryCtx,
