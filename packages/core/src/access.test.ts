@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { can, grants } from "./access";
-import type { Permission } from "./access";
+import { can, grants, ROLES, statement } from "./access";
+import type { Permission, Resource } from "./access";
 
 const ALL_PERMISSIONS = [
   { resource: "image", action: "read" },
@@ -69,5 +69,64 @@ describe("can", () => {
     expect(can(["admin"], { resource: "score", action: "rescore" })).toBe(false);
     // @ts-expect-error "photo" is not a resource
     expect(can(["admin"], { resource: "photo", action: "read" })).toBe(false);
+  });
+});
+function declaredPermissions(): Permission[] {
+  return (Object.keys(statement) as Resource[]).flatMap((resource) =>
+    statement[resource].map((action) => ({ resource, action }) as Permission),
+  );
+}
+
+function label(permission: Permission): string {
+  return `${permission.resource}:${permission.action}`;
+}
+
+function roleMatrix(): string {
+  const permissions = declaredPermissions();
+  const header = `| role | ${permissions.map(label).join(" | ")} |`;
+  const divider = `| --- | ${permissions.map(() => "---").join(" | ")} |`;
+  const rows = ROLES.map(
+    (role) => `| ${role} | ${permissions.map((p) => (can([role], p) ? "yes" : "no")).join(" | ")} |`,
+  );
+  return [header, divider, ...rows].join("\n");
+}
+
+describe("permission matrix", () => {
+  it("derives every role x statement cell from grants", () => {
+    for (const role of ROLES) {
+      for (const permission of declaredPermissions()) {
+        const granted = grants[role].some(
+          (candidate) =>
+            candidate.resource === permission.resource && candidate.action === permission.action,
+        );
+        expect(can([role], permission), `${role} / ${label(permission)}`).toBe(granted);
+      }
+    }
+  });
+
+  it("never grants outside the statement", () => {
+    const declared = new Set(declaredPermissions().map(label));
+    for (const role of ROLES) {
+      for (const permission of grants[role]) {
+        expect(declared.has(label(permission)), `${role} / ${label(permission)}`).toBe(true);
+      }
+    }
+  });
+
+  it("denies everything to unknown roles and to no roles", () => {
+    for (const permission of declaredPermissions()) {
+      expect(can([], permission), label(permission)).toBe(false);
+      expect(can(["guest"], permission), label(permission)).toBe(false);
+      expect(can(["Admin"], permission), label(permission)).toBe(false);
+    }
+  });
+
+  it("snapshots the full grants matrix", () => {
+    expect(roleMatrix()).toMatchInlineSnapshot(`
+      "| role | image:read | image:create | image:rescore | image:archive | score:read | audit:read |
+      | --- | --- | --- | --- | --- | --- | --- |
+      | user | yes | yes | yes | yes | yes | no |
+      | admin | yes | yes | yes | yes | yes | yes |"
+    `);
   });
 });

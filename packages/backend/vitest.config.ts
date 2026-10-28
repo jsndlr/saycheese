@@ -1,13 +1,36 @@
 import { defineConfig } from "vitest/config";
 
+const testEnv = {
+  // `convex/env.ts` validates process.env at module load, so tests need a
+  // valid environment before the module is imported. Values are fake and local.
+  BETTER_AUTH_SECRET: "test-secret-test-secret-test-secret-32",
+  SITE_URL: "http://localhost:3001",
+};
+
 export default defineConfig({
   test: {
-    include: ["test/**/*.test.ts"],
-    env: {
-      // `convex/env.ts` validates process.env at module load, so tests need a
-      // valid environment before the module is imported. Values are local.
-      BETTER_AUTH_SECRET: "test-secret-test-secret-test-secret-32",
-      SITE_URL: "http://localhost:3001",
-    },
+    projects: [
+      {
+        test: {
+          name: "node",
+          include: ["test/**/*.test.ts"],
+          exclude: ["test/runtime.test.ts"],
+          env: testEnv,
+        },
+      },
+      {
+        test: {
+          name: "edge",
+          include: ["test/runtime.test.ts"],
+          environment: "edge-runtime",
+          env: testEnv,
+          server: {
+            deps: {
+              inline: ["@convex-dev/better-auth"],
+            },
+          },
+        },
+      },
+    ],
   },
 });
