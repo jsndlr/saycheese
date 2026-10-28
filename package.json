@@ -1,0 +1,37 @@
+{
+  "name": "saycheese",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm -r dev",
+    "build": "pnpm -r --if-present build",
+    "check-types": "pnpm -r check-types",
+    "dev:web": "pnpm --filter web dev",
+    "dev:server": "pnpm --filter @saycheese/backend dev",
+    "dev:setup": "pnpm --filter @saycheese/backend dev:setup",
+    "deploy:setup": "pnpm dlx vercel link",
+    "dev:vercel": "pnpm dlx vercel dev -L",
+    "env:preview": "tsx scripts/sync-vercel-env.ts preview",
+    "env:production": "tsx scripts/sync-vercel-env.ts production",
+    "deploy": "pnpm dlx vercel deploy",
+    "deploy:prod": "pnpm dlx vercel deploy --prod",
+    "deploy:check": "pnpm dlx vercel deploy --dry",
+    "env:generate": "varlock codegen --path ./apps/web/",
+    "postinstall": "varlock codegen --path ./apps/web/"
+  },
+  "dependencies": {
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@saycheese/config": "workspace:*",
+    "@types/node": "catalog:",
+    "tsx": "^4.23.13",
+    "typescript": "catalog:",
+    "varlock": "catalog:"
+  },
+  "packageManager": "pnpm@10.34.7"
+}
