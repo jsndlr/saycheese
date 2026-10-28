@@ -6,18 +6,26 @@
   "author": "",
   "scripts": {
     "dev": "convex dev",
-    "dev:setup": "convex dev --configure --until-success"
+    "dev:setup": "convex dev --configure --until-success",
+    "lint": "eslint .",
+    "check-types": "tsc --noEmit -p convex/tsconfig.json && tsc --noEmit -p test/tsconfig.json",
+    "test": "vitest run"
   },
   "dependencies": {
     "@convex-dev/better-auth": "catalog:",
+    "@saycheese/core": "workspace:*",
     "better-auth": "catalog:",
     "convex": "catalog:",
+    "convex-helpers": "^0.1.129",
     "sharp": "^0.35.5",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@saycheese/config": "workspace:*",
     "@types/node": "catalog:",
-    "typescript": "catalog:"
+    "eslint": "^9.39.5",
+    "typescript": "catalog:",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^3.2.7"
   }
 }

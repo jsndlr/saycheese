@@ -22,7 +22,8 @@
     "deploy:prod": "pnpm dlx vercel deploy --prod",
     "deploy:check": "pnpm dlx vercel deploy --dry",
     "env:generate": "varlock codegen --path ./apps/web/",
-    "postinstall": "varlock codegen --path ./apps/web/"
+    "postinstall": "varlock codegen --path ./apps/web/",
+    "check": "pnpm -r --if-present lint && pnpm -r check-types"
   },
   "dependencies": {
     "zod": "catalog:"

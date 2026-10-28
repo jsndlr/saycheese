@@ -1,15 +1,9 @@
-import { query } from "./_generated/server";
-import { authComponent } from "./auth";
+import { authedQuery } from "./functions";
 
-export const get = query({
+export const get = authedQuery({
   args: {},
-  handler: async (ctx) => {
-    const authUser = await authComponent.safeGetAuthUser(ctx);
-    if (!authUser) {
-      return {
-        message: "Not authenticated",
-      };
-    }
+  permission: { resource: "image", action: "read" },
+  handler: async () => {
     return {
       message: "This is private",
     };

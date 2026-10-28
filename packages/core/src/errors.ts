@@ -1,5 +1,6 @@
 export const ERROR_CODES = [
   "AUTH_REQUIRED",
+  "FORBIDDEN",
   "INVALID_CREDENTIALS",
   "EMAIL_TAKEN",
   "VALIDATION_FAILED",
@@ -22,6 +23,7 @@ export type ErrorCode = (typeof ERROR_CODES)[number];
 
 export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   AUTH_REQUIRED: "Sign in to continue.",
+  FORBIDDEN: "You do not have permission to do that.",
   INVALID_CREDENTIALS: "Email or password is incorrect.",
   EMAIL_TAKEN: "That email is already registered.",
   VALIDATION_FAILED: "Check the highlighted fields.",

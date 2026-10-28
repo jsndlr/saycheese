@@ -1,90 +1,30 @@
-# Welcome to your Convex functions directory!
+# Convex functions
 
-Write your Convex functions here.
-See https://docs.convex.dev/functions for more.
+The function contract lives in `functions.ts`. It is the only module that may
+import `query`, `mutation` or `action` from `./_generated/server` (ESLint
+enforces this), so every function goes through auth and permissions.
 
-A query function that takes two arguments looks like:
+- `authedQuery` / `authedMutation` — signed-in only. `permission` is required by
+  the type and is checked with `can(roles, permission)` from `@saycheese/core`;
+  the handler receives `ctx.user` (`id`, `email`, `name`, `roles`) and must not
+  call `ctx.auth` itself.
+- `publicQuery` — unauthenticated reads only. Requires `access: "public"` so the
+  exemption is explicit and greppable.
+- `internalQuery`, `internalMutation`, `internalAction`, `httpAction` — import
+  directly from `./_generated/server` when needed.
 
 ```ts
-import { v } from "convex/values";
+// convex/images.ts
+import { authedQuery } from "./functions";
 
-// convex/myFunctions.ts
-import { query } from "./_generated/server";
-
-export const myQueryFunction = query({
-  // Validators for arguments.
-  args: {
-    first: v.number(),
-    second: v.string(),
-  },
-
-  // Function implementation.
-  handler: async (ctx, args) => {
-    // Read the database as many times as you need here.
-    // See https://docs.convex.dev/database/reading-data.
-    const documents = await ctx.db.query("tablename").collect();
-
-    // Arguments passed from the client are properties of the args object.
-    console.log(args.first, args.second);
-
-    // Write arbitrary JavaScript here: filter, aggregate, build derived data,
-    // remove non-public properties, or create new objects.
-    return documents;
+export const get = authedQuery({
+  args: {},
+  permission: { resource: "image", action: "read" },
+  handler: async (ctx) => {
+    return await ctx.db.query("images").first();
   },
 });
 ```
 
-Using this query function in a React component looks like:
-
-```ts
-const data = useQuery(api.myFunctions.myQueryFunction, {
-  first: 10,
-  second: "hello",
-});
-```
-
-A mutation function looks like:
-
-```ts
-import { v } from "convex/values";
-
-// convex/myFunctions.ts
-import { mutation } from "./_generated/server";
-
-export const myMutationFunction = mutation({
-  // Validators for arguments.
-  args: {
-    first: v.string(),
-    second: v.string(),
-  },
-
-  // Function implementation.
-  handler: async (ctx, args) => {
-    // Insert or modify documents in the database here.
-    // Mutations can also read from the database like queries.
-    // See https://docs.convex.dev/database/writing-data.
-    const message = { body: args.first, author: args.second };
-    const id = await ctx.db.insert("messages", message);
-
-    // Optionally, return a value from your mutation.
-    return await ctx.db.get("messages", id);
-  },
-});
-```
-
-Using this mutation function in a React component looks like:
-
-```ts
-const mutation = useMutation(api.myFunctions.myMutationFunction);
-function handleButtonPress() {
-  // fire and forget, the most common way to use mutations
-  mutation({ first: "Hello!", second: "me" });
-  // OR
-  // use the result once the mutation has completed
-  mutation({ first: "Hello!", second: "me" }).then((result) => console.log(result));
-}
-```
-
-Use the Convex CLI to push your functions to a deployment. See everything
-the Convex CLI can do by running `npx convex -h` in your project root
-directory. To learn more, launch the docs with `npx convex docs`.
+Environment variables are read only through `env` from `./env`, which validates
+them with Zod at module load.

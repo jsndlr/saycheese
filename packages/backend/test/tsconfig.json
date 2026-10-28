@@ -1,0 +1,10 @@
+{
+  "extends": "../convex/tsconfig.json",
+  "compilerOptions": {
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "types": ["node"]
+  },
+  "include": ["./**/*.ts", "../convex/**/*.ts"],
+  "exclude": ["../convex/_generated"]
+}

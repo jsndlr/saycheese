@@ -2,14 +2,16 @@ import { httpRouter } from "convex/server";
 
 import { api } from "./_generated/api";
 import { httpAction } from "./_generated/server";
-import { authComponent, createAuth } from "./auth";
+import { createAuth } from "./auth";
+import { authComponent } from "./authComponent";
+import { env } from "./env";
 
 const http = httpRouter();
 
 authComponent.registerRoutes(http, createAuth);
 
 const health = httpAction(async (ctx) => {
-  const deploy = process.env.DEPLOYMENT_LABEL ?? null;
+  const deploy = env.DEPLOYMENT_LABEL ?? null;
 
   try {
     await ctx.runQuery(api.healthCheck.get, {});

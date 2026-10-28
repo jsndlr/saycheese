@@ -9,6 +9,9 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as authComponent from "../authComponent.js";
+import type * as env from "../env.js";
+import type * as functions from "../functions.js";
 import type * as healthCheck from "../healthCheck.js";
 import type * as http from "../http.js";
 import type * as privateData from "../privateData.js";
@@ -21,6 +24,9 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  authComponent: typeof authComponent;
+  env: typeof env;
+  functions: typeof functions;
   healthCheck: typeof healthCheck;
   http: typeof http;
   privateData: typeof privateData;

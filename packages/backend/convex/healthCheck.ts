@@ -1,6 +1,8 @@
-import { query } from "./_generated/server";
+import { publicQuery } from "./functions";
 
-export const get = query({
+export const get = publicQuery({
+  args: {},
+  access: "public",
   handler: async (ctx) => {
     // `_storage` is a built-in system table present in every deployment, so this
     // read works while the app schema is empty. `.first()` yields null when the
