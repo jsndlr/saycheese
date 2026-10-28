@@ -17,7 +17,7 @@ export type AuthedUser = {
 
 type AuthedCtx = { user: AuthedUser };
 
-function fail(code: ErrorCode): never {
+export function fail(code: ErrorCode): never {
   const payload = errorPayload(code);
   throw new ConvexError({ code: payload.code, message: payload.message });
 }

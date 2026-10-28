@@ -1,4 +1,29 @@
 export const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
+
+/**
+ * `ctx.storage.generateUploadUrl()` links expire after one hour
+ * (https://docs.convex.dev/file-storage/upload-files#generating-the-upload-url).
+ */
+export const UPLOAD_URL_TTL_MS = 60 * 60 * 1000;
+
+/**
+ * Extra slack on top of the upload URL lifetime before a stored object is
+ * refused at commit. Covers upload completion racing the URL's expiry and
+ * small clock skew between the upload and the commit mutation.
+ */
+export const UPLOAD_COMMIT_GRACE_MS = 15 * 60 * 1000;
+
+/**
+ * Accepted upload MIME types. Mirrors the `UNSUPPORTED_MEDIA_TYPE` message in
+ * `errors.ts`; all three are decodable by sharp.
+ */
+export const IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+
+export type ImageMime = (typeof IMAGE_MIME_TYPES)[number];
+
+export function isAllowedImageMime(value: string): value is ImageMime {
+  return (IMAGE_MIME_TYPES as readonly string[]).includes(value);
+}
 export const MAX_PIXELS = 20_000_000;
 export const MAX_EDGE = 8192;
 export const MIN_EDGE = 64;

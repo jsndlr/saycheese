@@ -1,11 +1,12 @@
 import { ROLES, can } from "@saycheese/core/access";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { readWrapperMetadata, WRAPPER_MARKER } from "../convex/functions";
 import type { WrapperMetadata } from "../convex/functions";
+import schema from "../convex/schema";
 
 const CONVEX_DIR = fileURLToPath(new URL("../convex", import.meta.url));
 
@@ -140,6 +141,26 @@ function forbiddenBuilderImports(source: string): string[] {
   return violations;
 }
 
+/** Directories that will hold the phase-2 query and command modules. */
+const GUARDED_DIRS = ["queries", "commands"] as const;
+
+function guardedViolations(pattern: RegExp): string[] {
+  return GUARDED_DIRS.flatMap((dir) => {
+    const root = join(CONVEX_DIR, dir);
+    if (!existsSync(root)) {
+      return [];
+    }
+    return sourceFiles(root).flatMap((path) => {
+      const location = relative(CONVEX_DIR, path).split(sep).join("/");
+      return readFileSync(path, "utf8")
+        .split("\n")
+        .flatMap((line, index) =>
+          pattern.test(line) ? [`${location}:${index + 1}: ${line.trim()}`] : [],
+        );
+    });
+  });
+}
+
 describe("public function architecture", () => {
   it("only exposes functions built through the tagged wrappers", () => {
     const untagged: string[] = [];
@@ -216,8 +237,82 @@ describe("public function architecture", () => {
       "| function | wrapper | permission | roles |
       | --- | --- | --- | --- |
       | convex/auth.ts:getCurrentUser | publicQuery | public | any (anonymous) |
+      | convex/commands/images.ts:createUpload | authedMutation | image:create | user, admin |
+      | convex/commands/images.ts:commitUpload | authedMutation | image:create | user, admin |
       | convex/healthCheck.ts:get | publicQuery | public | any (anonymous) |
       | convex/queries/me.ts:current | authedQuery | signed-in | any signed-in |"
     `);
+  });
+});
+
+describe("database access guard", () => {
+  it("forbids .filter() calls under convex/queries and convex/commands", () => {
+    const violations = guardedViolations(/\.filter\s*\(/);
+
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
+
+  it("forbids hard deletes under convex/queries and convex/commands", () => {
+    // Archiving is a field write (`archivedAt`); no document is ever hard-deleted.
+    const violations = guardedViolations(/ctx\.db\.delete\s*\(/);
+
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
+});
+
+describe("schema invariants", () => {
+  // `at`, camelCase `createdAt`/`archivedAt`, and snake_case `*_at`.
+  const TIMESTAMP_FIELD = /^(?:at|.*At|.*_at)$/;
+
+  // Pinned so a matcher regression that silently matches nothing fails the test.
+  const EXPECTED_TIMESTAMPS = [
+    "auditEvents.at",
+    "images.archivedAt",
+    "images.createdAt",
+    "scores.createdAt",
+    "scoringAttempts.at",
+  ];
+
+  it("stores every timestamp as a number and has no client _creationTime", () => {
+    const violations: string[] = [];
+    const timestamps: string[] = [];
+
+    for (const [tableName, table] of Object.entries(schema.tables)) {
+      const validator = table.validator;
+      if (validator.kind !== "object") {
+        violations.push(`${tableName} is defined with a ${validator.kind} validator`);
+        continue;
+      }
+      const fields = validator.fields as Record<string, { kind: string }>;
+      for (const [fieldName, field] of Object.entries(fields)) {
+        if (fieldName === "_creationTime") {
+          violations.push(`${tableName}.${fieldName} duplicates the system timestamp`);
+        }
+        if (TIMESTAMP_FIELD.test(fieldName)) {
+          timestamps.push(`${tableName}.${fieldName}`);
+          if (field.kind !== "float64") {
+            violations.push(`${tableName}.${fieldName} is ${field.kind}, not a number`);
+          }
+        }
+      }
+    }
+
+    expect(timestamps.sort()).toEqual(EXPECTED_TIMESTAMPS);
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
+
+  it("exports every index declared in schema.ts", () => {
+    const declared = [
+      ...readFileSync(join(CONVEX_DIR, "schema.ts"), "utf8").matchAll(
+        /\.index\(\s*["']([^"']+)["']/g,
+      ),
+    ].map((match) => match[1]);
+
+    const exported = Object.values(schema.tables).flatMap((table) =>
+      table[" indexes"]().map(({ indexDescriptor }) => indexDescriptor),
+    );
+
+    expect(declared.length).toBeGreaterThan(0);
+    expect([...new Set(declared)].sort()).toEqual([...new Set(exported)].sort());
   });
 });
