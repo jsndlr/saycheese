@@ -15,7 +15,17 @@ function createAuth(ctx: GenericCtx<DataModel>) {
     database: authComponent.adapter(ctx),
     emailAndPassword: {
       enabled: true,
+      minPasswordLength: 12,
+      maxPasswordLength: 200,
       requireEmailVerification: false,
+    },
+    emailVerification: {
+      // Resend is the real transport; this console transport is for local development.
+      sendOnSignUp: false,
+      sendVerificationEmail: async ({ user, url }) => {
+        const suffix = env.LOG_LEVEL === "debug" ? ` url=${url}` : "";
+        console.info(`[auth] verification email for user ${user.id}: a mail would be sent${suffix}`);
+      },
     },
     plugins: [
       convex({

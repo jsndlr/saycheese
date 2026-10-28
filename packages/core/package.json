@@ -8,7 +8,8 @@
     "./access": "./src/access.ts",
     "./limits": "./src/limits.ts",
     "./errors": "./src/errors.ts",
-    "./scoring": "./src/scoring.ts"
+    "./scoring": "./src/scoring.ts",
+    "./validation": "./src/validation.ts"
   },
   "scripts": {
     "check-types": "tsc --noEmit",

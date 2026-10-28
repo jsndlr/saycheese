@@ -43,12 +43,19 @@ async function resolveUser(ctx: GenericCtx<DataModel>): Promise<AuthedUser> {
   };
 }
 
+/**
+ * Either a resource permission checked against the role grants, or the
+ * explicit `"signed-in"` literal for reads that only need an authenticated
+ * user (for example the caller's own profile).
+ */
+export type PermissionInput = Permission | "signed-in";
+
 async function authorize(
   ctx: GenericCtx<DataModel>,
-  permission: Permission,
+  permission: PermissionInput,
 ): Promise<AuthedCtx> {
   const user = await resolveUser(ctx);
-  if (!can(user.roles, permission)) {
+  if (permission !== "signed-in" && !can(user.roles, permission)) {
     return fail("FORBIDDEN");
   }
   return { user };
@@ -60,7 +67,7 @@ async function authorize(
  */
 export const authedQuery = zCustomQuery(query, {
   args: {},
-  input: async (ctx, _args, extra: { permission: Permission }) => {
+  input: async (ctx, _args, extra: { permission: PermissionInput }) => {
     const { user } = await authorize(ctx, extra.permission);
     return { ctx: { user }, args: {} };
   },
@@ -71,7 +78,7 @@ export const authedQuery = zCustomQuery(query, {
  */
 export const authedMutation = zCustomMutation(mutation, {
   args: {},
-  input: async (ctx, _args, extra: { permission: Permission }) => {
+  input: async (ctx, _args, extra: { permission: PermissionInput }) => {
     const { user } = await authorize(ctx, extra.permission);
     return { ctx: { user }, args: {} };
   },

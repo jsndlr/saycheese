@@ -46,6 +46,25 @@ export const unknownResource = authedQuery({
   handler: async () => null,
 });
 
+export const signedInRead = authedQuery({
+  args: {},
+  permission: "signed-in",
+  handler: async (ctx) => ctx.user.id,
+});
+
+export const signedInWrite = authedMutation({
+  args: {},
+  permission: "signed-in",
+  handler: async (ctx) => ctx.user.email,
+});
+
+export const bogusPermission = authedQuery({
+  args: {},
+  // @ts-expect-error "anything" is neither a Permission nor "signed-in"
+  permission: "anything",
+  handler: async () => null,
+});
+
 export const publicRead = publicQuery({
   args: {},
   access: "public",

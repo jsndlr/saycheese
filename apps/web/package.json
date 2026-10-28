@@ -7,11 +7,13 @@
     "build": "next build",
     "check-types": "tsc --noEmit",
     "start": "next start",
+    "test": "vitest run",
     "env:generate": "varlock codegen"
   },
   "dependencies": {
     "@convex-dev/better-auth": "catalog:",
     "@saycheese/backend": "workspace:*",
+    "@saycheese/core": "workspace:*",
     "@saycheese/ui": "workspace:*",
     "@swc/helpers": "^0.5.23",
     "@tanstack/react-form": "^1.33.5",
@@ -34,6 +36,7 @@
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "tailwindcss": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "^3.2.7"
   }
 }

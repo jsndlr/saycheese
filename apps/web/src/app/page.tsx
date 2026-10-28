@@ -1,6 +1,7 @@
 "use client";
 import { api } from "@saycheese/backend/convex/_generated/api";
 import { useQuery } from "convex/react";
+import Link from "next/link";
 
 const TITLE_TEXT = `
  ██████╗ ███████╗████████╗████████╗███████╗██████╗
@@ -38,6 +39,17 @@ export default function Home() {
                   ? "Connected"
                   : "Error"}
             </span>
+          </div>
+        </section>
+        <section className="rounded-lg border p-4">
+          <h2 className="mb-2 font-medium">Get started</h2>
+          <div className="flex flex-wrap gap-4 text-sm">
+            <Link href="/sign-up" className="text-primary underline-offset-4 hover:underline">
+              Create an account
+            </Link>
+            <Link href="/sign-in" className="text-primary underline-offset-4 hover:underline">
+              Sign in
+            </Link>
           </div>
         </section>
       </div>
