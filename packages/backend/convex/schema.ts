@@ -35,6 +35,7 @@ export default defineSchema({
     archivedAt: v.optional(v.number()),
   })
     .index("by_user_created", ["userId", "createdAt"])
+    .index("by_user_live_created", ["userId", "archivedAt", "createdAt"])
     .index("by_user_hash", ["userId", "sha256"])
     .index("by_raw_storage", ["rawStorageId"])
     .index("by_storage", ["storageId"])

@@ -240,6 +240,9 @@ describe("public function architecture", () => {
       | convex/commands/images.ts:createUpload | authedMutation | image:create | user, admin |
       | convex/commands/images.ts:commitUpload | authedMutation | image:create | user, admin |
       | convex/healthCheck.ts:get | publicQuery | public | any (anonymous) |
+      | convex/queries/images.ts:list | authedQuery | image:read | user, admin |
+      | convex/queries/images.ts:byId | authedQuery | image:read | user, admin |
+      | convex/queries/images.ts:fileUrl | authedQuery | image:read | user, admin |
       | convex/queries/me.ts:current | authedQuery | signed-in | any signed-in |"
     `);
   });

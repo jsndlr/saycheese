@@ -17,6 +17,8 @@ import type * as functions from "../functions.js";
 import type * as healthCheck from "../healthCheck.js";
 import type * as http from "../http.js";
 import type * as lib_storage from "../lib/storage.js";
+import type * as model_images from "../model/images.js";
+import type * as queries_images from "../queries/images.js";
 import type * as queries_me from "../queries/me.js";
 import type * as validators_index from "../validators/index.js";
 
@@ -36,6 +38,8 @@ declare const fullApi: ApiFromModules<{
   healthCheck: typeof healthCheck;
   http: typeof http;
   "lib/storage": typeof lib_storage;
+  "model/images": typeof model_images;
+  "queries/images": typeof queries_images;
   "queries/me": typeof queries_me;
   "validators/index": typeof validators_index;
 }>;
