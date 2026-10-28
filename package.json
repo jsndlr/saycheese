@@ -7,7 +7,7 @@
   ],
   "type": "module",
   "scripts": {
-    "dev": "pnpm -r dev",
+    "dev": "pnpm -r --parallel dev",
     "build": "pnpm -r --if-present build",
     "check-types": "pnpm -r check-types",
     "dev:web": "pnpm --filter web dev",
