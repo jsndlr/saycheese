@@ -43,6 +43,7 @@ export const auditAction = v.union(
   v.literal("image.commit"),
   v.literal("image.archive"),
   v.literal("image.rescore"),
+  v.literal("image.fail"),
   v.literal("score.fail"),
   v.literal("auth.signin"),
 );

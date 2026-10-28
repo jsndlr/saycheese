@@ -172,8 +172,6 @@ it("never deletes the objects referenced by seeded images", async () => {
       plan.storageId = await storeAged(t, CUTOFF_MS + 60_000, `${index}-large`);
       plan.previewId = await storeAged(t, CUTOFF_MS + 60_000, `${index}-medium`);
       plan.thumbId = await storeAged(t, CUTOFF_MS + 60_000, `${index}-thumb`);
-    } else {
-      plan.rawStorageId = await storeAged(t, CUTOFF_MS + 60_000, `${index}-raw`);
     }
     plans.push(plan);
   }
@@ -186,11 +184,11 @@ it("never deletes the objects referenced by seeded images", async () => {
       (id): id is Id<"_storage"> => id !== undefined,
     ),
   );
-  expect(seededIds).toHaveLength(11);
+  expect(seededIds).toHaveLength(12);
 
   const result = await t.mutation(runSweep, {});
 
-  expect(result).toMatchObject({ checked: 11, deleted: 0, more: false });
+  expect(result).toMatchObject({ checked: 12, deleted: 0, more: false });
   for (const storageId of seededIds) {
     expect(await storageExists(t, storageId)).toBe(true);
   }

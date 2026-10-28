@@ -14,4 +14,14 @@ crons.interval(
   {},
 );
 
+// A failed action, a lost scheduler run or a crash leaves the row in
+// `processing`/`uploaded` forever; the sweep fails it with IMAGE_TIMEOUT after
+// `PROCESSING_TIMEOUT_MS` and releases the storage objects it still owns.
+crons.interval(
+  "sweep stuck images",
+  { minutes: 10 },
+  internal.internal.stuckImages.run,
+  {},
+);
+
 export default crons;

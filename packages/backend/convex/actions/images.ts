@@ -51,6 +51,144 @@ async function storeVariants(
   }
 }
 
+/**
+ * Everything after a successful claim. Kept separate so `process` can wrap the
+ * whole pipeline in one catch: any unexpected throw still ends in
+ * `failed`/`INTERNAL` instead of leaving the row in `processing`.
+ */
+async function processClaimed(
+  ctx: ActionCtx,
+  imageId: Id<"images">,
+  claim: { rawStorageId: Id<"_storage">; mime: string },
+): Promise<void> {
+  let bytes: Buffer;
+  try {
+    const blob = await ctx.storage.get(claim.rawStorageId);
+    if (blob === null) {
+      await ctx.runMutation(internal.internal.images.markFailed, {
+        imageId,
+        code: "IMAGE_CORRUPT",
+      });
+      return;
+    }
+    // Buffer, not Uint8Array: sharp only accepts host-realm typed arrays, and
+    // the test harness runs this action inside the edge-runtime realm.
+    bytes = Buffer.from(await blob.arrayBuffer());
+  } catch (error) {
+    await ctx.runMutation(internal.internal.images.markFailed, {
+      imageId,
+      code: "IMAGE_CORRUPT",
+    });
+    console.log(
+      JSON.stringify({
+        event: "image.process.read_failed",
+        imageId,
+        reason: error instanceof Error ? error.message : String(error),
+      }),
+    );
+    return;
+  }
+
+  const result = await validateImage(bytes, claim.mime);
+  if (!result.ok) {
+    await ctx.runMutation(internal.internal.images.markFailed, {
+      imageId,
+      code: result.code,
+    });
+    console.log(
+      JSON.stringify({
+        event: "image.process.invalid",
+        imageId,
+        code: result.code,
+      }),
+    );
+    return;
+  }
+
+  // Structured log only: ids and dimensions, never bytes or storage URLs.
+  console.log(
+    JSON.stringify({
+      event: "image.process.validated",
+      imageId,
+      mime: result.sniffedMime,
+      width: result.width,
+      height: result.height,
+      pages: result.pages,
+    }),
+  );
+
+  let encoded: EncodedVariants;
+  try {
+    encoded = await encodeVariants(bytes);
+  } catch (error) {
+    await ctx.runMutation(internal.internal.images.markFailed, {
+      imageId,
+      code: "IMAGE_CORRUPT",
+    });
+    console.log(
+      JSON.stringify({
+        event: "image.process.encode_failed",
+        imageId,
+        reason: error instanceof Error ? error.message : String(error),
+      }),
+    );
+    return;
+  }
+
+  let stored: StoredVariants;
+  try {
+    stored = await storeVariants(ctx, encoded.variants);
+  } catch (error) {
+    // storeVariants already deleted any object it managed to store.
+    await ctx.runMutation(internal.internal.images.markFailed, {
+      imageId,
+      code: "INTERNAL",
+    });
+    console.log(
+      JSON.stringify({
+        event: "image.process.store_failed",
+        imageId,
+        reason: error instanceof Error ? error.message : String(error),
+      }),
+    );
+    return;
+  }
+
+  const ready = await ctx.runMutation(internal.internal.images.markReady, {
+    imageId,
+    ...stored,
+    width: encoded.width,
+    height: encoded.height,
+  });
+
+  if (!ready) {
+    // The row left `processing` while encoding (failed, archived, gone). The
+    // mutation changed nothing, so its new objects are unreferenced.
+    await Promise.all(
+      Object.values(stored).map((id) => ctx.storage.delete(id)),
+    );
+    console.log(JSON.stringify({ event: "image.process.discarded", imageId }));
+    return;
+  }
+
+  // Structured log only: ids and sizes, never bytes or storage URLs.
+  console.log(
+    JSON.stringify({
+      event: "image.process.ready",
+      imageId,
+      width: encoded.width,
+      height: encoded.height,
+      bytes: {
+        original: encoded.variants.original.bytes.byteLength,
+        preview: encoded.variants.preview.bytes.byteLength,
+        thumb: encoded.variants.thumb.bytes.byteLength,
+      },
+    }),
+  );
+
+  // TODO(Phase 3): enqueue scoring
+}
+
 export const process = internalAction({
   args: { imageId: v.id("images") },
   handler: async (ctx, { imageId }) => {
@@ -59,137 +197,29 @@ export const process = internalAction({
       { imageId },
     );
     // Already claimed, already failed or gone: a retry must not redo anything.
+    // Errors before the claim stay visible; nothing is swallowed here.
     if (claim === null) {
       return;
     }
 
-    let bytes: Buffer;
     try {
-      const blob = await ctx.storage.get(claim.rawStorageId);
-      if (blob === null) {
-        await ctx.runMutation(internal.internal.images.markFailed, {
-          imageId,
-          code: "IMAGE_CORRUPT",
-        });
-        return;
-      }
-      // Buffer, not Uint8Array: sharp only accepts host-realm typed arrays, and
-      // the test harness runs this action inside the edge-runtime realm.
-      bytes = Buffer.from(await blob.arrayBuffer());
+      await processClaimed(ctx, imageId, claim);
     } catch (error) {
-      await ctx.runMutation(internal.internal.images.markFailed, {
-        imageId,
-        code: "IMAGE_CORRUPT",
-      });
+      // A bug or a sharp crash surfaced as an exception would otherwise leave
+      // the row in `processing` until the stuck sweep. Specific failures keep
+      // their own codes above; this is the terminal fallback.
+      const reason = error instanceof Error ? error.message : String(error);
       console.log(
         JSON.stringify({
-          event: "image.process.read_failed",
+          event: "image.process.unexpected_error",
           imageId,
-          reason: error instanceof Error ? error.message : String(error),
+          reason,
         }),
       );
-      return;
-    }
-
-    const result = await validateImage(bytes, claim.mime);
-    if (!result.ok) {
-      await ctx.runMutation(internal.internal.images.markFailed, {
-        imageId,
-        code: result.code,
-      });
-      console.log(
-        JSON.stringify({
-          event: "image.process.invalid",
-          imageId,
-          code: result.code,
-        }),
-      );
-      return;
-    }
-
-    // Structured log only: ids and dimensions, never bytes or storage URLs.
-    console.log(
-      JSON.stringify({
-        event: "image.process.validated",
-        imageId,
-        mime: result.sniffedMime,
-        width: result.width,
-        height: result.height,
-        pages: result.pages,
-      }),
-    );
-
-    let encoded: EncodedVariants;
-    try {
-      encoded = await encodeVariants(bytes);
-    } catch (error) {
-      await ctx.runMutation(internal.internal.images.markFailed, {
-        imageId,
-        code: "IMAGE_CORRUPT",
-      });
-      console.log(
-        JSON.stringify({
-          event: "image.process.encode_failed",
-          imageId,
-          reason: error instanceof Error ? error.message : String(error),
-        }),
-      );
-      return;
-    }
-
-    let stored: StoredVariants;
-    try {
-      stored = await storeVariants(ctx, encoded.variants);
-    } catch (error) {
-      // storeVariants already deleted any object it managed to store.
       await ctx.runMutation(internal.internal.images.markFailed, {
         imageId,
         code: "INTERNAL",
       });
-      console.log(
-        JSON.stringify({
-          event: "image.process.store_failed",
-          imageId,
-          reason: error instanceof Error ? error.message : String(error),
-        }),
-      );
-      return;
     }
-
-    const ready = await ctx.runMutation(internal.internal.images.markReady, {
-      imageId,
-      ...stored,
-      width: encoded.width,
-      height: encoded.height,
-    });
-
-    if (!ready) {
-      // The row left `processing` while encoding (failed, archived, gone). The
-      // mutation changed nothing, so its new objects are unreferenced.
-      await Promise.all(
-        Object.values(stored).map((id) => ctx.storage.delete(id)),
-      );
-      console.log(
-        JSON.stringify({ event: "image.process.discarded", imageId }),
-      );
-      return;
-    }
-
-    // Structured log only: ids and sizes, never bytes or storage URLs.
-    console.log(
-      JSON.stringify({
-        event: "image.process.ready",
-        imageId,
-        width: encoded.width,
-        height: encoded.height,
-        bytes: {
-          original: encoded.variants.original.bytes.byteLength,
-          preview: encoded.variants.preview.bytes.byteLength,
-          thumb: encoded.variants.thumb.bytes.byteLength,
-        },
-      }),
-    );
-
-    // TODO(Phase 3): enqueue scoring
   },
 });

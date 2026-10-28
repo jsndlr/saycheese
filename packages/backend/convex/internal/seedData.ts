@@ -2,10 +2,16 @@ import type { ErrorCode } from "@saycheese/core/errors";
 import type { ScoreStatus } from "@saycheese/core/scoring";
 import { v } from "convex/values";
 
-import type { Id } from "../_generated/dataModel";
+import type { Id, Doc } from "../_generated/dataModel";
+import type { MutationCtx } from "../_generated/server";
 import { internalMutation, internalQuery } from "../_generated/server";
 import { env } from "../env";
-import { isStorageIdReferenced } from "../lib/storage";
+import { deleteIfExists, isStorageIdReferenced } from "../lib/storage";
+import {
+  hasStorageRefs,
+  isRepairableSeedState,
+  matchesSeedState,
+} from "../model/seed";
 import { errorCode, imageStatus, scoreStatus } from "../validators";
 
 /**
@@ -62,6 +68,13 @@ export type SeedImageRow = {
   };
 };
 
+export type ExistingSeedImage = {
+  sha256: string;
+  status: SeedImageRow["status"];
+  failureCode: ErrorCode | null;
+  hasStorage: boolean;
+};
+
 function storageIdsOf(image: SeedImageRow): Id<"_storage">[] {
   return [
     image.rawStorageId,
@@ -71,22 +84,64 @@ function storageIdsOf(image: SeedImageRow): Id<"_storage">[] {
   ].filter((id): id is Id<"_storage"> => id !== undefined);
 }
 
-/** Hashes already seeded for a user; the action skips storing their blobs. */
-export const hashes = internalQuery({
+/**
+ * Removes a stale seed row and everything it owns: its score, its audit rows
+ * and every storage object it still references. Called only for rows the seed
+ * is allowed to replace (`isRepairableSeedState`); the delete and the insert
+ * that follows commit in the same transaction.
+ */
+async function deleteSeedImage(
+  ctx: MutationCtx,
+  image: Doc<"images">,
+): Promise<void> {
+  const storageIds = [
+    image.rawStorageId,
+    image.storageId,
+    image.previewId,
+    image.thumbId,
+  ].filter((id): id is Id<"_storage"> => id !== undefined);
+
+  const audits = await ctx.db
+    .query("auditEvents")
+    .withIndex("by_doc", (q) => q.eq("docId", image._id))
+    .collect();
+  for (const audit of audits) {
+    await ctx.db.delete("auditEvents", audit._id);
+  }
+  if (image.scoreId !== undefined) {
+    await ctx.db.delete("scores", image.scoreId);
+  }
+  await ctx.db.delete("images", image._id);
+
+  for (const storageId of storageIds) {
+    await deleteIfExists(ctx, storageId);
+  }
+}
+
+/** Seed rows already present for a user, with the state the action compares. */
+export const existing = internalQuery({
   args: { userId: v.string() },
-  handler: async (ctx, { userId }): Promise<string[]> => {
+  handler: async (ctx, { userId }): Promise<ExistingSeedImage[]> => {
     const rows = await ctx.db
       .query("images")
       .withIndex("by_user_hash", (q) => q.eq("userId", userId))
       .collect();
-    return rows.map((row) => row.sha256);
+    return rows.map((row) => ({
+      sha256: row.sha256,
+      status: row.status,
+      failureCode: row.failureCode ?? null,
+      hasStorage: hasStorageRefs(row),
+    }));
   },
 });
 
 /**
- * Writes every image that does not exist yet for (userId, sha256) and returns
- * storage ids that were passed in but are not referenced by any row, so the
- * action can delete objects it stored for a row that raced into existence.
+ * Writes every image whose spec is not already satisfied for (userId, sha256).
+ * A stale row the seed owns (`uploaded`, or `failed` with IMAGE_TIMEOUT) is
+ * deleted with its storage objects and audit rows, then recreated from the
+ * plan, so a demo deployment converges on the current spec instead of
+ * duplicating rows. Objects that were passed in but not referenced by any row
+ * are returned so the action can delete them.
  */
 export const commit = internalMutation({
   args: { userId: v.string(), images: v.array(seedImage) },
@@ -104,13 +159,25 @@ export const commit = internalMutation({
         .first();
 
       if (existing !== null) {
-        imagesSkipped += 1;
-        for (const storageId of storageIdsOf(image)) {
-          if (!(await isStorageIdReferenced(ctx, storageId))) {
-            unusedStorageIds.push(storageId);
+        const existingState = {
+          status: existing.status,
+          failureCode: existing.failureCode ?? null,
+          hasStorage: hasStorageRefs(existing),
+        };
+        const repairable =
+          !matchesSeedState(image, existingState) &&
+          isRepairableSeedState(existingState);
+        if (!repairable) {
+          imagesSkipped += 1;
+          for (const storageId of storageIdsOf(image)) {
+            if (!(await isStorageIdReferenced(ctx, storageId))) {
+              unusedStorageIds.push(storageId);
+            }
           }
+          continue;
         }
-        continue;
+        // The new plan already stored its objects; retire the stale row's.
+        await deleteSeedImage(ctx, existing);
       }
 
       const imageId = await ctx.db.insert("images", {

@@ -11,7 +11,7 @@ import { createAuth } from "../auth";
 import { env } from "../env";
 import { encodeVariants } from "../lib/imageEncoding";
 import { assertSeedDeployment } from "../lib/seedGuard";
-import { SEED_IMAGES, SEED_SOURCE, type SeedImage } from "../model/seed";
+import { SEED_IMAGES, SEED_SOURCE, matchesSeedState, type SeedImage } from "../model/seed";
 import type { SeedImageRow } from "./seedData";
 
 /**
@@ -136,10 +136,9 @@ async function buildPlan(
     plan.storageId = large;
     plan.previewId = medium;
     plan.thumbId = thumb;
-  } else {
-    // Pending and failed images keep the raw upload and have no variants.
-    plan.rawStorageId = await storeBlob(ctx, source, "image/png");
   }
+  // A failed image stores nothing: failImage always removes the storage
+  // references, so the seed must match that invariant.
 
   return plan;
 }
@@ -151,10 +150,11 @@ export const run = internalAction({
 
     const { userId, userCreated } = await ensureDemoUser(ctx);
 
-    const existingHashes = await ctx.runQuery(internal.internal.seedData.hashes, {
-      userId,
-    });
-    const existing = new Set(existingHashes);
+    const existingRows = await ctx.runQuery(
+      internal.internal.seedData.existing,
+      { userId },
+    );
+    const existing = new Map(existingRows.map((row) => [row.sha256, row]));
 
     const base = Date.now();
     const plans: SeedImageRow[] = [];
@@ -164,11 +164,14 @@ export const run = internalAction({
       const createdAt = base - index * IMAGE_SPACING_MS;
       const source = await renderSource(spec);
       const sha256 = createHash("sha256").update(source).digest("hex");
-      if (existing.has(sha256)) {
-        // Render only: no storage object is created for an image that exists.
+      const current = existing.get(sha256);
+      if (current !== undefined && matchesSeedState(spec, current)) {
+        // Render only: no storage object is created for a satisfied image.
         imagesSkipped += 1;
         continue;
       }
+      // A stale row (uploaded or IMAGE_TIMEOUT) is replaced by `commit`, so its
+      // replacement objects are stored here like a brand-new image.
       plans.push(await buildPlan(ctx, spec, createdAt, source, sha256));
     }
 

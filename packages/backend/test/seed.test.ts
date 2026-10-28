@@ -44,6 +44,10 @@ const list = makeFunctionReference<
   Page
 >("queries/images:list");
 
+const byId = makeFunctionReference<"query", { id: Id<"images"> }, ImageDto>(
+  "queries/images:byId",
+);
+
 const encoder = new TextEncoder();
 const SPACING_MS = 3 * 60_000;
 
@@ -105,8 +109,6 @@ async function fixturePlans(t: Test, base: number): Promise<SeedImageRow[]> {
       plan.storageId = await store(t, `${index}-large`);
       plan.previewId = await store(t, `${index}-medium`);
       plan.thumbId = await store(t, `${index}-thumb`);
-    } else {
-      plan.rawStorageId = await store(t, `${index}-raw`);
     }
     plans.push(plan);
   }
@@ -154,11 +156,18 @@ it("writes the five demo images and three score rows, all storage referenced", a
     .map((image) => [image.status, image.failureCode ?? null]);
   expect(statuses).toEqual([
     ["failed", "IMAGE_CORRUPT"],
-    ["uploaded", null],
+    ["scoring", null],
     ["scored", null],
     ["scored", null],
     ["scored", null],
   ]);
+
+  const failedImage = rows.images.find((image) => image.status === "failed");
+  expect(failedImage).toMatchObject({ failureCode: "IMAGE_CORRUPT" });
+  expect(failedImage?.rawStorageId).toBeUndefined();
+  expect(failedImage?.storageId).toBeUndefined();
+  expect(failedImage?.previewId).toBeUndefined();
+  expect(failedImage?.thumbId).toBeUndefined();
 
   const scoreStatuses = rows.scores.map((score) => score.status).sort();
   expect(scoreStatuses).toEqual(["multiple_faces", "no_face", "scored"]);
@@ -183,6 +192,15 @@ it("writes the five demo images and three score rows, all storage referenced", a
     expect(image.rawStorageId).toBeUndefined();
   }
 
+  const scoring = rows.images.find((image) => image.status === "scoring");
+  expect(scoring).toBeDefined();
+  expect(scoring?.rawStorageId).toBeUndefined();
+  expect(scoring?.scoreId).toBeUndefined();
+  expect(scoring?.failureCode).toBeUndefined();
+  expect(scoring?.storageId).toBeDefined();
+  expect(scoring?.previewId).toBeDefined();
+  expect(scoring?.thumbId).toBeDefined();
+
   const storedIds = plans.flatMap((plan) =>
     [plan.rawStorageId, plan.storageId, plan.previewId, plan.thumbId].filter(
       (id): id is Id<"_storage"> => id !== undefined,
@@ -201,12 +219,155 @@ it("writes the five demo images and three score rows, all storage referenced", a
     "scored",
     "scored",
     "scored",
-    "uploaded",
+    "scoring",
     "failed",
   ]);
   expect(page.page.map((image) => image.createdAt)).toEqual(
     [...page.page.map((image) => image.createdAt)].sort((a, b) => b - a),
   );
+});
+
+it("reads the seeded failed image with its IMAGE_CORRUPT code", async () => {
+  const t = convexTest(schema, modules);
+  const component = register(t, "betterAuth");
+  const { user, asUser } = await createAccount(t, component, "demo@saycheese.dev");
+  const plans = await fixturePlans(t, Date.now());
+  await t.mutation(commit, { userId: user._id, images: plans });
+
+  const failed = await t.run(async (ctx) =>
+    ctx.db
+      .query("images")
+      .withIndex("by_status_started", (q) => q.eq("status", "failed"))
+      .first(),
+  );
+  expect(failed).not.toBeNull();
+
+  await expect(asUser.query(byId, { id: failed!._id })).resolves.toMatchObject({
+    id: failed!._id,
+    status: "failed",
+    failureCode: "IMAGE_CORRUPT",
+  });
+});
+
+it("replaces stale uploaded and IMAGE_TIMEOUT rows instead of duplicating", async () => {
+  const t = convexTest(schema, modules);
+  const component = register(t, "betterAuth");
+  const { user } = await createAccount(t, component, "demo@saycheese.dev");
+  const plans = await fixturePlans(t, Date.now());
+  const scoringPlan = plans[3]!;
+  const failedPlan = plans[4]!;
+
+  const oldUploadedRaw = await store(t, "old-uploaded-raw");
+  const oldTimeoutRaw = await store(t, "old-timeout-raw");
+  const oldUploadedId = await t.run(async (ctx) =>
+    ctx.db.insert("images", {
+      userId: user._id,
+      sha256: scoringPlan.sha256,
+      rawStorageId: oldUploadedRaw,
+      mime: "image/png",
+      bytes: 16,
+      status: "uploaded",
+      createdAt: 1,
+    }),
+  );
+  const oldTimeoutId = await t.run(async (ctx) =>
+    ctx.db.insert("images", {
+      userId: user._id,
+      sha256: failedPlan.sha256,
+      rawStorageId: oldTimeoutRaw,
+      mime: "image/png",
+      bytes: 16,
+      status: "failed",
+      failureCode: "IMAGE_TIMEOUT",
+      createdAt: 2,
+    }),
+  );
+  await t.run(async (ctx) =>
+    ctx.db.insert("auditEvents", {
+      actorId: "system:process",
+      action: "image.fail",
+      table: "images",
+      docId: oldTimeoutId,
+      before: { status: "uploaded" },
+      after: { status: "failed", failureCode: "IMAGE_TIMEOUT" },
+      at: 3,
+    }),
+  );
+
+  const result = await t.mutation(commit, {
+    userId: user._id,
+    images: [scoringPlan, failedPlan],
+  });
+
+  expect(result).toEqual({ imagesCreated: 2, imagesSkipped: 0, unusedStorageIds: [] });
+
+  const rows = await t.run(async (ctx) => ctx.db.query("images").collect());
+  expect(rows).toHaveLength(2);
+  expect(await t.run(async (ctx) => ctx.db.get("images", oldUploadedId))).toBeNull();
+  expect(await t.run(async (ctx) => ctx.db.get("images", oldTimeoutId))).toBeNull();
+  for (const storageId of [oldUploadedRaw, oldTimeoutRaw]) {
+    expect(await t.run(async (ctx) => (await ctx.db.system.get(storageId)) !== null)).toBe(false);
+  }
+  expect(
+    await t.run(async (ctx) =>
+      (await ctx.db
+        .query("auditEvents")
+        .withIndex("by_doc", (q) => q.eq("docId", oldTimeoutId))
+        .collect()).length,
+    ),
+  ).toBe(0);
+
+  const scoring = rows.find((image) => image.sha256 === scoringPlan.sha256);
+  expect(scoring).toMatchObject({ status: "scoring" });
+  expect(scoring?.rawStorageId).toBeUndefined();
+  expect(scoring?.storageId).toBeDefined();
+  expect(scoring?.previewId).toBeDefined();
+  expect(scoring?.thumbId).toBeDefined();
+  expect(scoring?.scoreId).toBeUndefined();
+
+  const failed = rows.find((image) => image.sha256 === failedPlan.sha256);
+  expect(failed).toMatchObject({ status: "failed", failureCode: "IMAGE_CORRUPT" });
+});
+
+it("repairs an old failed seed row that still references storage", async () => {
+  const t = convexTest(schema, modules);
+  const component = register(t, "betterAuth");
+  const { user } = await createAccount(t, component, "demo@saycheese.dev");
+  const plans = await fixturePlans(t, Date.now());
+  const failedPlan = plans[4]!;
+
+  const oldRaw = await store(t, "old-failed-raw");
+  const oldId = await t.run(async (ctx) =>
+    ctx.db.insert("images", {
+      userId: user._id,
+      sha256: failedPlan.sha256,
+      rawStorageId: oldRaw,
+      mime: "image/png",
+      bytes: 16,
+      status: "failed",
+      failureCode: "IMAGE_CORRUPT",
+      createdAt: 1,
+    }),
+  );
+
+  const result = await t.mutation(commit, { userId: user._id, images: [failedPlan] });
+
+  expect(result).toEqual({ imagesCreated: 1, imagesSkipped: 0, unusedStorageIds: [] });
+  expect(await t.run(async (ctx) => ctx.db.get("images", oldId))).toBeNull();
+  expect(
+    await t.run(async (ctx) => (await ctx.db.system.get(oldRaw)) !== null),
+  ).toBe(false);
+
+  const rows = await t.run(async (ctx) => ctx.db.query("images").collect());
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toMatchObject({
+    status: "failed",
+    failureCode: "IMAGE_CORRUPT",
+  });
+  expect(rows[0]?.rawStorageId).toBeUndefined();
+  expect(rows[0]?.storageId).toBeUndefined();
+  expect(rows[0]?.previewId).toBeUndefined();
+  expect(rows[0]?.thumbId).toBeUndefined();
 });
 
 it("is a no-op on the second run and reports objects it did not use", async () => {

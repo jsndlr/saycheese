@@ -45,6 +45,16 @@ export const RATE_LIMITS = {
   score: { limit: 100, windowMs: 24 * 60 * 60_000 },
 } as const;
 
+/**
+ * How long an image may sit in `processing` (or in `uploaded` without its
+ * scheduled process action ever starting) before the stuck sweep fails it.
+ *
+ * Convex caps Node runtime action execution at 10 minutes
+ * (https://docs.convex.dev/production/state/limits#execution-time-and-scheduling),
+ * so a row older than this cannot still have a live action behind it.
+ */
+export const PROCESSING_TIMEOUT_MS = 15 * 60 * 1000;
+
 export function exceedsByteCap(bytes: number): boolean {
   return bytes > MAX_UPLOAD_BYTES;
 }

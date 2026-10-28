@@ -428,6 +428,50 @@ it("returns URLs for every processed variant and null before processing", async 
   }
 });
 
+it("T-SEC-03 exposes a failed row and its code without storage ids", async () => {
+  const t = convexTest(schema, modules);
+  const { user, asUser } = await signedIn(t);
+  const raw = await store(t, "failed raw");
+
+  // Same shape as the seeded IMAGE_CORRUPT image: readable after the failure.
+  const imageId = await t.run(async (ctx) =>
+    ctx.db.insert("images", {
+      userId: user._id,
+      sha256: "f".repeat(64),
+      rawStorageId: raw,
+      mime: JPEG,
+      bytes: 128,
+      width: 800,
+      height: 600,
+      status: "failed",
+      failureCode: "IMAGE_CORRUPT",
+      createdAt: 5,
+    }),
+  );
+
+  const detail = await asUser.query(byId, { id: imageId });
+  expect(detail).toMatchObject({
+    id: imageId,
+    status: "failed",
+    failureCode: "IMAGE_CORRUPT",
+  });
+
+  const page = await asUser.query(list, {
+    paginationOpts: { numItems: 10, cursor: null },
+  });
+  const listed = page.page.find((image) => image.id === imageId);
+  expect(listed).toMatchObject({
+    status: "failed",
+    failureCode: "IMAGE_CORRUPT",
+  });
+
+  const keys = collectKeys({ detail, page });
+  for (const key of ["rawStorageId", "storageId", "previewId", "thumbId"]) {
+    expect(keys.has(key)).toBe(false);
+  }
+  expect(JSON.stringify({ detail, page })).not.toContain(raw);
+});
+
 it("joins the score row into the DTO and returns null without one", async () => {
   const t = convexTest(schema, modules);
   const { user, asUser } = await signedIn(t);

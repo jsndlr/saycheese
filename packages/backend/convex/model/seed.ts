@@ -18,9 +18,12 @@ export type SeedScore = {
 export type SeedImage = {
   /** Stable label, also used in test failure messages. */
   key: string;
-  status: "scored" | "uploaded" | "failed";
+  status: "scored" | "scoring" | "failed";
   failureCode?: "IMAGE_CORRUPT";
-  /** True when the processed WebP variants exist. Failed/pending keep the raw PNG. */
+  /**
+   * True when the processed WebP variants exist. A `scoring` image has been
+   * processed but has no score yet; a failed image stores no objects at all.
+   */
   hasVariants: boolean;
   palette: {
     from: readonly [number, number, number];
@@ -30,6 +33,67 @@ export type SeedImage = {
 };
 
 export const SEED_SOURCE = { width: 1200, height: 900 } as const;
+
+/** True when a row still points at any storage object. */
+export function hasStorageRefs(image: {
+  rawStorageId?: unknown;
+  storageId?: unknown;
+  previewId?: unknown;
+  thumbId?: unknown;
+}): boolean {
+  return (
+    image.rawStorageId !== undefined ||
+    image.storageId !== undefined ||
+    image.previewId !== undefined ||
+    image.thumbId !== undefined
+  );
+}
+
+/** The fields that identify which demo state a row is in. */
+export type SeedState = {
+  status: string;
+  failureCode?: string | null;
+  /** True when the row still points at any storage object. */
+  hasStorage?: boolean;
+};
+
+/**
+ * True when an existing row already represents the spec. A `failed` spec also
+ * pins the failure code and requires no storage references (a failure always
+ * cleans up its objects), so a timed-out row or an old row with a leftover raw
+ * object is not mistaken for the intended state.
+ */
+export function matchesSeedState(
+  expected: SeedState,
+  actual: SeedState,
+): boolean {
+  if (expected.status !== actual.status) {
+    return false;
+  }
+  if (expected.failureCode !== undefined) {
+    if (actual.failureCode !== expected.failureCode) {
+      return false;
+    }
+  } else if (actual.failureCode !== undefined && actual.failureCode !== null) {
+    return false;
+  }
+  return expected.status !== "failed" || actual.hasStorage !== true;
+}
+
+/**
+ * Rows the seed may replace: an upload whose process job never ran, a row the
+ * stuck sweep failed for timing out, and an old failed seed row that still
+ * references storage (the current spec stores nothing for a failure). Any
+ * other existing row (a user's real image) is left alone.
+ */
+export function isRepairableSeedState(actual: SeedState): boolean {
+  return (
+    actual.status === "uploaded" ||
+    (actual.status === "failed" &&
+      (actual.failureCode === "IMAGE_TIMEOUT" ||
+        (actual.failureCode === "IMAGE_CORRUPT" && actual.hasStorage === true)))
+  );
+}
 
 export const SEED_IMAGES: readonly SeedImage[] = [
   {
@@ -75,9 +139,9 @@ export const SEED_IMAGES: readonly SeedImage[] = [
     },
   },
   {
-    key: "pending",
-    status: "uploaded",
-    hasVariants: false,
+    key: "scoring",
+    status: "scoring",
+    hasVariants: true,
     palette: { from: [232, 232, 236], to: [168, 172, 184] },
   },
   {

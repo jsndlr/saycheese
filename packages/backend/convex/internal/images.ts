@@ -1,6 +1,10 @@
+import type { ErrorCode } from "@saycheese/core/errors";
 import { v } from "convex/values";
 
+import type { Id } from "../_generated/dataModel";
+import type { MutationCtx } from "../_generated/server";
 import { internalMutation } from "../_generated/server";
+import { deleteIfExists } from "../lib/storage";
 import { errorCode } from "../validators";
 
 /**
@@ -25,7 +29,10 @@ export const claimForProcessing = internalMutation({
       return null;
     }
 
-    await ctx.db.patch("images", imageId, { status: "processing" });
+    await ctx.db.patch("images", imageId, {
+      status: "processing",
+      processingStartedAt: Date.now(),
+    });
     return { rawStorageId: image.rawStorageId, mime: image.mime };
   },
 });
@@ -61,30 +68,86 @@ export const markReady = internalMutation({
       height: args.height,
       // Unset as well as delete: the row must stop pointing at the raw object.
       rawStorageId: undefined,
+      // No longer processing, so the stuck sweep has nothing to compare.
+      processingStartedAt: undefined,
     });
     if (rawStorageId !== undefined) {
-      await ctx.storage.delete(rawStorageId);
+      await deleteIfExists(ctx, rawStorageId);
     }
     return true;
   },
 });
 
 /**
- * Records a validation failure. Only a claimed (`processing`) row may fail, so
- * a stale or duplicate action can never overwrite a `ready` or already
- * `failed` row.
+ * Shared failure transition: `uploaded`/`processing -> failed`.
+ *
+ * Everything happens in the caller's transaction, so the row update, the
+ * storage deletes and the audit row commit or roll back together. A row that
+ * already finished (`ready`, `scored`, `failed`, ...) is left alone and the
+ * call returns `false`, so a stale action or sweep can never rewrite it.
+ *
+ * `uploaded` is allowed because the stuck sweep fails uploads whose scheduled
+ * process action never ran; the process action itself always claims first.
+ */
+export async function failImage(
+  ctx: Pick<MutationCtx, "db" | "storage">,
+  imageId: Id<"images">,
+  code: ErrorCode,
+  now: number,
+): Promise<boolean> {
+  const image = await ctx.db.get("images", imageId);
+  if (
+    image === null ||
+    (image.status !== "uploaded" && image.status !== "processing")
+  ) {
+    return false;
+  }
+
+  const storageIds = [
+    ...new Set(
+      [image.rawStorageId, image.storageId, image.previewId, image.thumbId].filter(
+        (storageId): storageId is Id<"_storage"> => storageId !== undefined,
+      ),
+    ),
+  ];
+
+  await ctx.db.patch("images", imageId, {
+    status: "failed",
+    failureCode: code,
+    rawStorageId: undefined,
+    storageId: undefined,
+    previewId: undefined,
+    thumbId: undefined,
+  });
+
+  // Deletes run inside this mutation, so they commit with the row update.
+  // Missing objects are skipped: a delete of a missing id would throw and roll
+  // the failure transition back (and abort a whole sweep batch with it).
+  for (const storageId of storageIds) {
+    await deleteIfExists(ctx, storageId);
+  }
+
+  await ctx.db.insert("auditEvents", {
+    actorId: "system:process",
+    action: "image.fail",
+    table: "images",
+    docId: imageId,
+    before: { status: image.status },
+    after: { status: "failed", failureCode: code },
+    at: now,
+  });
+
+  return true;
+}
+
+/**
+ * Records a validation or timeout failure. Only `uploaded`/`processing` rows
+ * may fail, so a stale or duplicate call can never overwrite a `ready`,
+ * `scored` or already `failed` row.
  */
 export const markFailed = internalMutation({
   args: { imageId: v.id("images"), code: errorCode },
   handler: async (ctx, { imageId, code }) => {
-    const image = await ctx.db.get("images", imageId);
-    if (image === null || image.status !== "processing") {
-      return false;
-    }
-
-    await ctx.db.patch("images", imageId, { status: "failed", failureCode: code });
-    // TODO(task 3): delete the raw and processed storage objects and write an
-    // audit row here. Deliberately not done yet: task 3 owns failure cleanup.
-    return true;
+    return await failImage(ctx, imageId, code, Date.now());
   },
 });

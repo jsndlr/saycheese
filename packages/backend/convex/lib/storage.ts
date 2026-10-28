@@ -1,5 +1,21 @@
 import type { Id } from "../_generated/dataModel";
-import type { QueryCtx } from "../_generated/server";
+import type { MutationCtx, QueryCtx } from "../_generated/server";
+
+/**
+ * Deletes a storage object only when it still exists. Inside a mutation a
+ * delete of a missing object throws and rolls the whole transaction back, so
+ * every path that may run after another transaction removed the object (a
+ * failed image whose raw upload is already gone, a seed repair on an old row)
+ * must go through this helper.
+ */
+export async function deleteIfExists(
+  ctx: Pick<MutationCtx, "db" | "storage">,
+  storageId: Id<"_storage">,
+): Promise<void> {
+  if ((await ctx.db.system.get(storageId)) !== null) {
+    await ctx.storage.delete(storageId);
+  }
+}
 
 /**
  * True when any images row owns this storage object. Every field that can point

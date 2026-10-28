@@ -29,6 +29,9 @@ export default defineSchema({
     width: v.optional(v.number()),
     height: v.optional(v.number()),
     status: imageStatus,
+    // Set when the process action claims the row; the stuck sweep compares it
+    // against `PROCESSING_TIMEOUT_MS`.
+    processingStartedAt: v.optional(v.number()),
     failureCode: v.optional(errorCode),
     scoreId: v.optional(v.id("scores")),
     createdAt: v.number(),
@@ -42,7 +45,8 @@ export default defineSchema({
     .index("by_preview", ["previewId"])
     .index("by_thumb", ["thumbId"])
     .index("by_hash", ["sha256"])
-    .index("by_status", ["status"]),
+    .index("by_status_started", ["status", "processingStartedAt"])
+    .index("by_status_created", ["status", "createdAt"]),
 
   scores: defineTable({
     sha256: v.string(),
