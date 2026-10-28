@@ -82,6 +82,46 @@ async function solidPng(width: number, height: number): Promise<Buffer> {
     .toBuffer();
 }
 
+/**
+ * A minimal ISO-BMFF `ftyp` box: size, `ftyp`, major brand, minor version,
+ * then compatible brands. Enough for magic-byte sniffing; no image items.
+ */
+function heifFtyp(majorBrand: string, compatibleBrands: string[]): Buffer {
+  const bytes = Buffer.alloc(16 + compatibleBrands.length * 4);
+  bytes.writeUInt32BE(bytes.length, 0);
+  bytes.write("ftyp", 4, "ascii");
+  bytes.write(majorBrand, 8, "ascii");
+  bytes.writeUInt32BE(0, 12);
+  compatibleBrands.forEach((brand, index) => {
+    bytes.write(brand, 16 + index * 4, "ascii");
+  });
+  return bytes;
+}
+
+/**
+ * A two-frame APNG header: signature, IHDR, `acTL` (2 frames), one IDAT, IEND.
+ * No fcTL/fdAT frames exist, but the animation chunk is what the sniffer and
+ * the upload policy key on.
+ */
+function craftedApng(width: number, height: number): Buffer {
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8; // bit depth
+  ihdr[9] = 6; // truecolour with alpha
+  const animationControl = Buffer.alloc(8);
+  animationControl.writeUInt32BE(2, 0); // num_frames
+  animationControl.writeUInt32BE(0, 4); // num_plays
+  const scanline = Buffer.alloc(1 + width * 4);
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk("IHDR", ihdr),
+    pngChunk("acTL", animationControl),
+    pngChunk("IDAT", deflateSync(scanline)),
+    pngChunk("IEND", Buffer.alloc(0)),
+  ]);
+}
+
 async function solidJpeg(width: number, height: number): Promise<Buffer> {
   return sharp({
     create: {
@@ -202,6 +242,32 @@ it("T-IMG-09 enforces the minimum edge and detects truncated or fake JPEGs", asy
   expect(await validateImage(fake, JPEG)).toEqual({
     ok: false,
     code: "IMAGE_CORRUPT",
+  });
+});
+
+it("T-IMG-10 reports HEIC/HEIF as HEIC_UNSUPPORTED regardless of declared type", async () => {
+  const fixtures = [
+    heifFtyp("heic", []), // iPhone-style major brand
+    heifFtyp("mif1", ["heic"]), // generic HEIF major brand, HEIC compatible
+  ];
+
+  for (const bytes of fixtures) {
+    for (const declared of ["image/heic", "image/jpeg"]) {
+      expect(await validateImage(bytes, declared)).toEqual({
+        ok: false,
+        code: "HEIC_UNSUPPORTED",
+      });
+    }
+  }
+});
+
+it("T-IMG-11 reports a two-frame APNG as animated, not unsupported", async () => {
+  const apng = craftedApng(64, 64);
+  expect(apng.length).toBeLessThan(1024);
+
+  expect(await validateImage(apng, PNG)).toEqual({
+    ok: false,
+    code: "ANIMATED_UNSUPPORTED",
   });
 });
 

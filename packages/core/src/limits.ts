@@ -24,6 +24,24 @@ export type ImageMime = (typeof IMAGE_MIME_TYPES)[number];
 export function isAllowedImageMime(value: string): value is ImageMime {
   return (IMAGE_MIME_TYPES as readonly string[]).includes(value);
 }
+
+/**
+ * HEIC/HEIF declarations are answered with `HEIC_UNSUPPORTED` rather than the
+ * generic unsupported-media error. The prebuilt sharp/libvips binary cannot
+ * decode HEVC-coded HEIC (`heif: Error while loading plugin`), so the format is
+ * rejected before an upload row exists. See "Supported images" in the README.
+ */
+export const HEIC_MIME_TYPES = [
+  "image/heic",
+  "image/heif",
+  "image/heic-sequence",
+  "image/heif-sequence",
+] as const;
+
+export function isHeicMime(value: string): boolean {
+  return (HEIC_MIME_TYPES as readonly string[]).includes(value);
+}
+
 export const MAX_PIXELS = 20_000_000;
 export const MAX_EDGE = 8192;
 export const MIN_EDGE = 64;

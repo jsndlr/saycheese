@@ -11,6 +11,47 @@ This project was created with [Better-T-Stack](https://github.com/AmanVarshney01
 - **Convex** - Reactive backend-as-a-service platform
 - **Authentication** - Better-Auth
 
+## Supported images
+
+### Allowlist and limits
+
+Accepted upload types are JPEG, PNG and WebP. Everything else is rejected.
+
+- **8 MiB** maximum upload (`8 * 1024 * 1024` bytes, checked at upload commit and again while processing).
+- **20 megapixels** maximum, **8192 px** maximum longest edge, **64 px** minimum on both edges.
+- **Single frame only.** Animated WebP and APNG are rejected; the image is not flattened to its first frame.
+
+The client's declared MIME type is checked at commit, but the bytes are authoritative: processing sniffs magic bytes and rejects a file whose content does not match an allowlisted format. AVIF is not in the allowlist.
+
+### What happens to an accepted image
+
+EXIF orientation is applied before resizing. The decoded pixels are re-encoded as WebP (quality 82) at three edges: 1600 (`original`), 512 (`preview`) and 160 (`thumb`), never enlarged. No metadata is carried to the output, so EXIF (including GPS), XMP and ICC profiles are stripped, and trailing payloads such as a JPEG/PHP polyglot are dropped. Only the three generated WebP variants are ever served; the uploaded bytes are stored solely as processing input and are never exposed.
+
+### HEIC/HEIF
+
+**Rejected, deliberately.** On 2026-10-29 a real HEVC-coded HEIC (libheif's `examples/example.heic`, 1280x854) was probed against the repo's prebuilt sharp 0.35.5, which bundles libheif 1.23.5. `sharp.format.heif` lists only `.avif` as an input suffix, `metadata()` succeeds (`format: "heif"`, `compression: "hevc"`), but decoding fails with `heif: Error while loading plugin: Support for this compression format has not been built in: HEVC (a suitable decoder plugin is libde265)`. Convex runs the same prebuilt Linux binary, so accepting HEIC would only move the failure later; it is answered with the specific `HEIC_UNSUPPORTED` message ("Export the photo as JPEG"). `file-type` reports such a file as `{ ext: "heic", mime: "image/heif" }`, which is also caught when a HEIC is renamed to `.jpg`.
+
+This decision would change with a custom libvips build that includes libde265 (or another HEVC decoder), or with client-side conversion to JPEG before upload. It would not change by allowlisting the MIME type alone.
+
+### Hostile input matrix
+
+| Input | Detection point | Outcome |
+| --- | --- | --- |
+| Upload over 8 MiB | Commit (also processing) | `PAYLOAD_TOO_LARGE`; no image row |
+| Declared `image/heic`, `image/heif`, `image/heic-sequence` or `image/heif-sequence` | Commit | `HEIC_UNSUPPORTED` |
+| HEIC/HEIF bytes declared as JPEG (renamed file) | Processing (magic bytes) | `HEIC_UNSUPPORTED`; row failed |
+| GIF, SVG, PDF, AVIF or other non-allowlisted content | Commit (declared MIME) or processing (magic bytes) | `UNSUPPORTED_MEDIA_TYPE` |
+| Declared MIME does not match sniffed bytes | Processing | `UNSUPPORTED_MEDIA_TYPE`; row failed |
+| Animated WebP, or a 2-frame APNG | Processing | `ANIMATED_UNSUPPORTED` |
+| Over 20 MP, or an edge over 8192 px | Processing, from the header before decode | `IMAGE_TOO_LARGE` |
+| An edge under 64 px, or a zero dimension | Processing, from the header | `IMAGE_TOO_SMALL` |
+| Truncated/fake image, decode failure, missing storage blob | Processing | `IMAGE_CORRUPT` |
+| JPEG/PHP polyglot | Processing accepts the pixels; re-encode writes only decoded pixels | Stored WebP has no trailing payload; original bytes are never served |
+| Same bytes uploaded again by the same user (same SHA-256) | Commit dedupe | Existing image returned with `deduplicated: true`; duplicate storage object deleted |
+| Upload link older than its lifetime plus grace | Commit | `UPLOAD_EXPIRED` |
+| Client-claimed byte count or SHA-256 disagrees with storage | Commit | `VALIDATION_FAILED` |
+| Uploaded row never processed within 15 minutes | Stuck-image sweep | `IMAGE_TIMEOUT` |
+
 ## Getting Started
 
 First, install the dependencies:

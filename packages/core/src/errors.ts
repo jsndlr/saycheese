@@ -6,6 +6,7 @@ export const ERROR_CODES = [
   "VALIDATION_FAILED",
   "PAYLOAD_TOO_LARGE",
   "UNSUPPORTED_MEDIA_TYPE",
+  "HEIC_UNSUPPORTED",
   "ANIMATED_UNSUPPORTED",
   "IMAGE_TOO_LARGE",
   "IMAGE_TOO_SMALL",
@@ -29,6 +30,8 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   VALIDATION_FAILED: "Check the highlighted fields.",
   PAYLOAD_TOO_LARGE: "Image is larger than 8 MB.",
   UNSUPPORTED_MEDIA_TYPE: "Use a JPEG, PNG or WebP.",
+  HEIC_UNSUPPORTED:
+    "iPhone HEIC photos are not supported yet. Export the photo as JPEG and upload it again.",
   ANIMATED_UNSUPPORTED: "Animated images are not supported.",
   IMAGE_TOO_LARGE: "Image dimensions are too large.",
   IMAGE_TOO_SMALL: "Image is too small.",

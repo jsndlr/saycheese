@@ -6,9 +6,10 @@ import {
   dimensionViolation,
   exceedsByteCap,
   isAllowedImageMime,
+  isHeicMime,
   type ImageMime,
 } from "@saycheese/core/limits";
-import { fileTypeFromBuffer } from "file-type";
+import { fileTypeFromBuffer, type FileTypeResult } from "file-type";
 import sharp, { type Metadata } from "sharp";
 
 /**
@@ -63,24 +64,45 @@ export async function validateImage(
     return { ok: false, code: "PAYLOAD_TOO_LARGE" };
   }
 
-  let sniffedMime: string | undefined;
+  let sniffed: FileTypeResult | undefined;
   try {
-    sniffedMime = (await fileTypeFromBuffer(bytes))?.mime;
+    sniffed = await fileTypeFromBuffer(bytes);
   } catch {
     // Undetectable bytes are indistinguishable from an unsupported format.
     return { ok: false, code: "UNSUPPORTED_MEDIA_TYPE" };
   }
 
   const declared = declaredMime.trim().toLowerCase();
-  // TODO(task 4): decide whether HEIC joins the allowlist; file-type reports
-  // `image/heic`, which is deliberately rejected until then.
+
+  // HEIC/HEIF is recognised so the refusal can explain the fix (export as
+  // JPEG) instead of claiming the file is not an image. The prebuilt sharp
+  // binary cannot decode HEVC-coded HEIC, so accepting it would only fail
+  // later. Applies regardless of the declared type, covering a HEIC renamed
+  // `.jpg`.
   if (
-    sniffedMime === undefined ||
-    !isAllowedImageMime(sniffedMime) ||
-    sniffedMime !== declared
+    sniffed !== undefined &&
+    (sniffed.ext === "heic" ||
+      sniffed.ext === "heif" ||
+      isHeicMime(sniffed.mime))
+  ) {
+    return { ok: false, code: "HEIC_UNSUPPORTED" };
+  }
+
+  // APNG is a PNG container carrying an animation. Report the animation
+  // instead of pretending the format is unknown.
+  if (sniffed !== undefined && sniffed.mime === "image/apng") {
+    return { ok: false, code: "ANIMATED_UNSUPPORTED" };
+  }
+
+  if (
+    sniffed === undefined ||
+    !isAllowedImageMime(sniffed.mime) ||
+    sniffed.mime !== declared
   ) {
     return { ok: false, code: "UNSUPPORTED_MEDIA_TYPE" };
   }
+
+  const sniffedMime = sniffed.mime;
 
   let metadata: Metadata;
   try {

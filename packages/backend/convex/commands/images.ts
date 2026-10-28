@@ -3,6 +3,7 @@ import {
   UPLOAD_URL_TTL_MS,
   exceedsByteCap,
   isAllowedImageMime,
+  isHeicMime,
 } from "@saycheese/core/limits";
 import { zid } from "convex-helpers/server/zod4";
 import { z } from "zod";
@@ -89,6 +90,10 @@ export const commitUpload = authedMutation({
     // aborted on error). Deleting the object here would therefore be a no-op.
     // The object stays unreferenced; Phase 3 needs an orphan sweep for uploads
     // that never commit.
+
+    if (isHeicMime(args.mime)) {
+      return fail("HEIC_UNSUPPORTED");
+    }
 
     if (!isAllowedImageMime(args.mime)) {
       return fail("UNSUPPORTED_MEDIA_TYPE");

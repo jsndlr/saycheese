@@ -301,6 +301,34 @@ it("rejects declared bytes that disagree with storage without writing a row", as
   expect((await tables(t)).images).toHaveLength(0);
 });
 
+it("rejects a declared HEIC upload with HEIC_UNSUPPORTED", async () => {
+  const t = convexTest(schema, modules);
+  const { asUser } = await signedIn(t);
+  const bytes = encoder.encode("heic bytes");
+  const storageId = await store(t, bytes);
+  const sha256 = await sha256Hex(bytes);
+
+  const heicMimes = [
+    "image/heic",
+    "image/heif",
+    "image/heic-sequence",
+    "image/heif-sequence",
+  ];
+  for (const mime of heicMimes) {
+    const error = await rejection(
+      asUser.mutation(commitUpload, {
+        storageId,
+        sha256,
+        bytes: bytes.length,
+        mime,
+      }),
+    );
+
+    expect(error.data).toMatchObject({ code: "HEIC_UNSUPPORTED" });
+  }
+  expect((await tables(t)).images).toHaveLength(0);
+});
+
 it("rejects a MIME type outside the core allowlist", async () => {
   const t = convexTest(schema, modules);
   const { asUser } = await signedIn(t);
