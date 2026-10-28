@@ -1,0 +1,22 @@
+{
+  "name": "@saycheese/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./access": "./src/access.ts",
+    "./limits": "./src/limits.ts",
+    "./errors": "./src/errors.ts",
+    "./scoring": "./src/scoring.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@saycheese/config": "workspace:*",
+    "typescript": "catalog:",
+    "vitest": "^3.2.4"
+  }
+}

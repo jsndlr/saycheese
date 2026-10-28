@@ -10,6 +10,7 @@
     "dev": "pnpm -r --parallel dev",
     "build": "pnpm -r --if-present build",
     "check-types": "pnpm -r check-types",
+    "test": "pnpm -r --if-present test",
     "dev:web": "pnpm --filter web dev",
     "dev:server": "pnpm --filter @saycheese/backend dev",
     "dev:setup": "pnpm --filter @saycheese/backend dev:setup",
