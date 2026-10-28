@@ -12,6 +12,8 @@ const envSchema = z
     SCORING_CONFIG_VERSION: z.string().default("1"),
     LOG_LEVEL: logLevelSchema.default("info"),
     DEPLOYMENT_LABEL: z.string().optional(),
+    // Dev-only demo account password used by `pnpm seed`.
+    SEED_DEMO_PASSWORD: z.string().min(12).optional(),
     AWS_REGION: z.string().optional(),
     AWS_ACCESS_KEY_ID: z.string().optional(),
     AWS_SECRET_ACCESS_KEY: z.string().optional(),

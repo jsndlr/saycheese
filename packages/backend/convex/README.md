@@ -28,3 +28,39 @@ export const get = authedQuery({
 
 Environment variables are read only through `env` from `./env`, which validates
 them with Zod at module load.
+
+## Seeding a development deployment
+
+`pnpm seed` (from the repo root) runs `internal/seed:run` against the
+deployment configured in `packages/backend/.env.local`:
+
+```bash
+pnpm seed
+# convex run internal/seed:run
+```
+
+It creates:
+
+- a Better Auth email/password account `demo@saycheese.dev` (password
+  `saycheese-demo-2026`, or `SEED_DEMO_PASSWORD` when set) that can sign in
+  through the normal form;
+- five images for that account, newest first: a scored image (score 82), a
+  `no_face` image, a `multiple_faces` image, a pending `uploaded` image, and a
+  `failed` image with `IMAGE_CORRUPT`. The scored images carry a `scores` row
+  (`provider: "stub"`, `providerModel: "stub-v1"`); variants are 1600/512/160
+  WebP at quality 82 from a 1200x900 PNG source.
+
+It is idempotent: the account is looked up by email, image bytes are generated
+deterministically, and an image whose `(userId, sha256)` already exists is
+skipped. A second run creates no user, rows or storage objects and returns
+`{ "userCreated": false, "imagesCreated": 0, "imagesSkipped": 5 }`; any object
+stored for a row that raced into existence is deleted.
+
+**Dev-only guard:** the action throws before writing anything unless `SITE_URL`
+is an `http://localhost` or `http://127.0.0.1` URL. Production uses the https
+Vercel URL, so production can never be seeded. The seed never writes password
+hashes itself: it calls Better Auth's `signUpEmail` API.
+
+The Node action renders the PNG/WebP bytes with `sharp`; the database rows are
+written by `internal/seedData:commit`, which is edge-safe and covered by
+`test/seed.test.ts` with pre-stored fixture blobs.
