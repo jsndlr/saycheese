@@ -2,8 +2,9 @@
 
 import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 import { cn } from "@saycheese/ui/lib/utils";
-import { ChevronRightIcon, CheckIcon } from "lucide-react";
 import * as React from "react";
+
+import { CheckIcon, ChevronRightIcon } from "../lib/icons";
 
 function DropdownMenu({ ...props }: MenuPrimitive.Root.Props) {
   return <MenuPrimitive.Root data-slot="dropdown-menu" {...props} />;

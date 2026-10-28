@@ -44,7 +44,10 @@ Your app will connect to the Convex cloud backend automatically.
 
 React web apps in this stack share shadcn/ui primitives through `packages/ui`.
 
-- Change design tokens and global styles in `packages/ui/src/styles/globals.css`
+- Change design tokens (colors, radius) in `packages/ui/src/styles/tokens.css`
+- Change the Tailwind theme mapping (fonts, `--color-*`, radius scale) in `packages/ui/src/styles/theme.css`
+- Change imports, sources, and base layer in `packages/ui/src/styles/globals.css`
+- Import icons from the barrel: `import { Moon } from "@saycheese/ui/lib/icons"` (`lucide-react` is only imported there)
 - Update shared primitives in `packages/ui/src/components/*`
 - Adjust shadcn aliases or style config in `packages/ui/components.json` and `apps/web/components.json`
 
