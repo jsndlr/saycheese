@@ -4,7 +4,8 @@
     "web": {
       "root": "apps/web",
       "framework": "nextjs",
-      "installCommand": "cd ../.. && pnpm install"
+      "installCommand": "cd ../.. && pnpm install",
+      "buildCommand": "cd ../.. && bash scripts/vercel-build.sh"
     }
   },
   "rewrites": [

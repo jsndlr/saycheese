@@ -97,6 +97,14 @@ Run standalone Node/Bun tools that use Varlock from the owning app directory so 
 
 For more details, see the guide on [Deploying to Vercel](https://www.better-t-stack.dev/docs/guides/vercel).
 
+### Deploy
+
+`scripts/vercel-build.sh` is the `web` service's build command:
+
+- Pushing to `main` triggers a Vercel production build, which runs `convex deploy` (requires `CONVEX_DEPLOY_KEY` in the Vercel Production environment) and builds the web app inside that command with the resolved `NEXT_PUBLIC_CONVEX_URL`. A failed Convex schema push or invalid backend environment fails the deployment; Convex CLI 1.48 runs `--cmd` before the push, so the web build may run first.
+- Preview deployments set `VERCEL_ENV=preview`, so no Convex deploy runs; the web app is built against the existing dev deployment from the Preview environment variables.
+- Seeding never runs on production: `convex/internal/seed.ts` refuses any `SITE_URL` that is not `http://localhost`/`http://127.0.0.1`.
+
 ## Project Structure
 
 ```
