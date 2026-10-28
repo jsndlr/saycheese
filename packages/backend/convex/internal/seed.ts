@@ -1,6 +1,5 @@
 "use node";
 
-import { VARIANTS, WEBP_QUALITY } from "@saycheese/core/limits";
 import { createHash } from "node:crypto";
 import sharp from "sharp";
 
@@ -10,6 +9,7 @@ import type { ActionCtx } from "../_generated/server";
 import { internalAction } from "../_generated/server";
 import { createAuth } from "../auth";
 import { env } from "../env";
+import { encodeVariants } from "../lib/imageEncoding";
 import { assertSeedDeployment } from "../lib/seedGuard";
 import { SEED_IMAGES, SEED_SOURCE, type SeedImage } from "../model/seed";
 import type { SeedImageRow } from "./seedData";
@@ -126,22 +126,13 @@ async function buildPlan(
   };
 
   if (spec.hasVariants) {
-    const variants = await Promise.all(
-      VARIANTS.map((variant) =>
-        sharp(source)
-          .resize({
-            width: variant.edge,
-            height: variant.edge,
-            fit: "inside",
-            withoutEnlargement: true,
-          })
-          .webp({ quality: WEBP_QUALITY })
-          .toBuffer(),
-      ),
-    );
-    const [large, medium, thumb] = await Promise.all(
-      variants.map((bytes) => storeBlob(ctx, bytes, "image/webp")),
-    );
+    // Same encoder as the upload action: one variant implementation only.
+    const { variants } = await encodeVariants(source);
+    const [large, medium, thumb] = await Promise.all([
+      storeBlob(ctx, variants.original.bytes, "image/webp"),
+      storeBlob(ctx, variants.preview.bytes, "image/webp"),
+      storeBlob(ctx, variants.thumb.bytes, "image/webp"),
+    ]);
     plan.storageId = large;
     plan.previewId = medium;
     plan.thumbId = thumb;

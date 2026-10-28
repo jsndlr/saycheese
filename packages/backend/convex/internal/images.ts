@@ -31,6 +31,45 @@ export const claimForProcessing = internalMutation({
 });
 
 /**
+ * Publishes the re-encoded variants and retires the raw upload in one
+ * transaction. The status check makes a stale action harmless: a row that was
+ * failed, archived or already finished in the meantime is left untouched and
+ * the caller deletes the objects it just stored.
+ */
+export const markReady = internalMutation({
+  args: {
+    imageId: v.id("images"),
+    storageId: v.id("_storage"),
+    previewId: v.id("_storage"),
+    thumbId: v.id("_storage"),
+    width: v.number(),
+    height: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const image = await ctx.db.get("images", args.imageId);
+    if (image === null || image.status !== "processing") {
+      return false;
+    }
+
+    const rawStorageId = image.rawStorageId;
+    await ctx.db.patch("images", args.imageId, {
+      status: "ready",
+      storageId: args.storageId,
+      previewId: args.previewId,
+      thumbId: args.thumbId,
+      width: args.width,
+      height: args.height,
+      // Unset as well as delete: the row must stop pointing at the raw object.
+      rawStorageId: undefined,
+    });
+    if (rawStorageId !== undefined) {
+      await ctx.storage.delete(rawStorageId);
+    }
+    return true;
+  },
+});
+
+/**
  * Records a validation failure. Only a claimed (`processing`) row may fail, so
  * a stale or duplicate action can never overwrite a `ready` or already
  * `failed` row.

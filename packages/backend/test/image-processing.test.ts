@@ -4,7 +4,7 @@ import type { TestConvex } from "convex-test";
 import { makeFunctionReference } from "convex/server";
 import { expect, it } from "vitest";
 
-import type { Id } from "../convex/_generated/dataModel";
+import type { Doc, Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
 
 /**
@@ -30,7 +30,23 @@ const markFailed = makeFunctionReference<
   boolean
 >("internal/images:markFailed");
 
-async function uploadedImage(t: Test, status: "uploaded" | "ready" = "uploaded") {
+type MarkReadyArgs = {
+  imageId: Id<"images">;
+  storageId: Id<"_storage">;
+  previewId: Id<"_storage">;
+  thumbId: Id<"_storage">;
+  width: number;
+  height: number;
+};
+
+const markReady = makeFunctionReference<"mutation", MarkReadyArgs, boolean>(
+  "internal/images:markReady",
+);
+
+async function uploadedImage(
+  t: Test,
+  status: Doc<"images">["status"] = "uploaded",
+) {
   return t.run(async (ctx) => {
     const rawStorageId = await ctx.storage.store(new Blob([new Uint8Array([1, 2, 3])]));
     const imageId = await ctx.db.insert("images", {
@@ -91,4 +107,66 @@ it("markFailed only moves processing -> failed and records the code", async () =
   // A duplicate failure cannot rewrite the recorded code.
   expect(await t.mutation(markFailed, { imageId, code: "IMAGE_CORRUPT" })).toBe(false);
   expect((await imageRow(t, imageId))?.failureCode).toBe("UNSUPPORTED_MEDIA_TYPE");
+});
+
+async function readyArgs(
+  t: Test,
+  imageId: Id<"images">,
+): Promise<MarkReadyArgs> {
+  return t.run(async (ctx) => {
+    const [storageId, previewId, thumbId] = await Promise.all([
+      ctx.storage.store(new Blob([new Uint8Array([4])])),
+      ctx.storage.store(new Blob([new Uint8Array([5])])),
+      ctx.storage.store(new Blob([new Uint8Array([6])])),
+    ]);
+    return { imageId, storageId, previewId, thumbId, width: 1600, height: 1067 };
+  });
+}
+
+it("markReady publishes variants, dimensions and deletes the raw object", async () => {
+  const t = convexTest(schema, modules);
+  const { imageId, rawStorageId } = await uploadedImage(t, "processing");
+  const args = await readyArgs(t, imageId);
+
+  expect(await t.mutation(markReady, args)).toBe(true);
+  expect(await imageRow(t, imageId)).toMatchObject({
+    status: "ready",
+    storageId: args.storageId,
+    previewId: args.previewId,
+    thumbId: args.thumbId,
+    width: 1600,
+    height: 1067,
+  });
+  expect((await imageRow(t, imageId))?.rawStorageId).toBeUndefined();
+
+  // The raw upload is retired in the same transaction, not just unlinked.
+  expect(
+    await t.run(async (ctx) => await ctx.storage.get(rawStorageId)),
+  ).toBeNull();
+  for (const id of [args.storageId, args.previewId, args.thumbId]) {
+    expect(
+      await t.run(async (ctx) => (await ctx.storage.get(id)) !== null),
+    ).toBe(true);
+  }
+});
+
+it("markReady leaves a row outside processing untouched", async () => {
+  for (const status of ["uploaded", "ready", "failed"] as const) {
+    const t = convexTest(schema, modules);
+    const { imageId, rawStorageId } = await uploadedImage(t, status);
+    const before = await imageRow(t, imageId);
+    const args = await readyArgs(t, imageId);
+
+    expect(await t.mutation(markReady, args)).toBe(false);
+    expect(await imageRow(t, imageId)).toEqual(before);
+    expect(
+      await t.run(async (ctx) => (await ctx.storage.get(rawStorageId)) !== null),
+    ).toBe(true);
+    // The caller owns cleanup of the three objects it stored.
+    for (const id of [args.storageId, args.previewId, args.thumbId]) {
+      expect(
+        await t.run(async (ctx) => (await ctx.storage.get(id)) !== null),
+      ).toBe(true);
+    }
+  }
 });

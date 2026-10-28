@@ -21,6 +21,7 @@ import type * as internal_images from "../internal/images.js";
 import type * as internal_seed from "../internal/seed.js";
 import type * as internal_seedData from "../internal/seedData.js";
 import type * as internal_storageSweep from "../internal/storageSweep.js";
+import type * as lib_imageEncoding from "../lib/imageEncoding.js";
 import type * as lib_imageValidation from "../lib/imageValidation.js";
 import type * as lib_seedGuard from "../lib/seedGuard.js";
 import type * as lib_storage from "../lib/storage.js";
@@ -50,6 +51,7 @@ declare const fullApi: ApiFromModules<{
   "internal/seed": typeof internal_seed;
   "internal/seedData": typeof internal_seedData;
   "internal/storageSweep": typeof internal_storageSweep;
+  "lib/imageEncoding": typeof lib_imageEncoding;
   "lib/imageValidation": typeof lib_imageValidation;
   "lib/seedGuard": typeof lib_seedGuard;
   "lib/storage": typeof lib_storage;
