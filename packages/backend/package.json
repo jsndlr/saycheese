@@ -17,6 +17,7 @@
     "better-auth": "catalog:",
     "convex": "catalog:",
     "convex-helpers": "^0.1.129",
+    "file-type": "^22.2.0",
     "sharp": "^0.35.5",
     "zod": "catalog:"
   },

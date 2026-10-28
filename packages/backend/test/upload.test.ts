@@ -35,7 +35,20 @@ const commitUpload = makeFunctionReference<
 >("commands/images:commitUpload");
 
 const JPEG = "image/jpeg";
+const PNG = "image/png";
 const encoder = new TextEncoder();
+
+/**
+ * A real 64x64 PNG, inlined so the edge test stays self-contained (sharp only
+ * runs in the node project). T-API-03 needs bytes that survive the process
+ * action, because dedupe deliberately ignores rows that failed validation.
+ */
+const VALID_PNG = Uint8Array.from(
+  atob(
+    "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAAA1BMVEUgYKAsHLN1AAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAG0lEQVRYw+3BgQAAAADDoPlT3+AEVQEAAAB8AxBAAAEZszF2AAAAAElFTkSuQmCC",
+  ),
+  (char) => char.charCodeAt(0),
+);
 
 async function rejection(
   promise: Promise<unknown>,
@@ -200,8 +213,7 @@ it("T-API-03 deduplicates per user and never duplicates rows or jobs", async () 
   const { user: userA, asUser: asA } = await createAccount(t, component, "a@example.test");
   const { asUser: asB } = await createAccount(t, component, "b@example.test");
 
-  const text = "identical pixels";
-  const bytes = encoder.encode(text);
+  const bytes = VALID_PNG;
   const sha256 = await sha256Hex(bytes);
 
   const firstStorage = await store(t, bytes);
@@ -209,7 +221,7 @@ it("T-API-03 deduplicates per user and never duplicates rows or jobs", async () 
     storageId: firstStorage,
     sha256,
     bytes: bytes.length,
-    mime: JPEG,
+    mime: PNG,
   });
   await t.finishAllScheduledFunctions(() => {});
 
@@ -218,7 +230,7 @@ it("T-API-03 deduplicates per user and never duplicates rows or jobs", async () 
     storageId: secondStorage,
     sha256,
     bytes: bytes.length,
-    mime: JPEG,
+    mime: PNG,
   });
 
   expect(second).toEqual({ id: first.id, deduplicated: true });
@@ -235,7 +247,7 @@ it("T-API-03 deduplicates per user and never duplicates rows or jobs", async () 
     storageId: userBStorage,
     sha256,
     bytes: bytes.length,
-    mime: JPEG,
+    mime: PNG,
   });
 
   expect(userB.deduplicated).toBe(false);
