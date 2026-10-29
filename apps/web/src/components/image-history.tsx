@@ -19,11 +19,9 @@ type ChipTone = "neutral" | "active" | "done" | "failed";
 
 const CHIP_TONES: Record<ChipTone, string> = {
   neutral: "border-border bg-muted text-muted-foreground",
-  active:
-    "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300",
-  done:
-    "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-  failed: "border-destructive/40 bg-destructive/10 text-destructive",
+  active: "border-transparent bg-accent text-accent-foreground",
+  done: "border-success/30 bg-success/12 text-success",
+  failed: "border-destructive/30 bg-destructive/10 text-destructive",
 };
 
 function chipFor(image: ImageDto): { label: string; tone: ChipTone } {
@@ -36,7 +34,7 @@ function chipFor(image: ImageDto): { label: string; tone: ChipTone } {
       case "no_face":
         return { label: HISTORY_COPY.status.noFace, tone: "neutral" };
       case "multiple_faces":
-        return { label: HISTORY_COPY.status.multipleFaces, tone: "done" };
+        return { label: HISTORY_COPY.status.multipleFaces, tone: "neutral" };
       case "low_quality":
         return { label: HISTORY_COPY.status.lowQuality, tone: "neutral" };
       case "unavailable":
@@ -67,7 +65,7 @@ function Thumbnail({ id, alt }: { id: ImageDto["id"]; alt: string }) {
   const file = useQuery(api.queries.images.fileUrl, { id, variant: "thumb" });
 
   return (
-    <div className="h-16 w-16 shrink-0 overflow-hidden border border-border bg-muted">
+    <div className="h-16 w-16 shrink-0 overflow-hidden rounded-[3px] border-[3px] border-paper bg-muted shadow-lift">
       {file?.url ? (
         <img
           src={file.url}
@@ -76,7 +74,7 @@ function Thumbnail({ id, alt }: { id: ImageDto["id"]; alt: string }) {
           alt={alt}
           loading="lazy"
           decoding="async"
-          className="h-16 w-16 object-cover"
+          className="h-full w-full object-cover"
         />
       ) : null}
     </div>
@@ -97,22 +95,22 @@ function HistoryRow({ image, live }: { image: ImageDto; live: boolean }) {
     <li>
       <Link
         href={`/app/images/${image.id}` as Route}
-        className="flex items-center gap-3 border-b border-border px-1 py-3 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/50"
+        className="press group flex items-center gap-4 rounded-2xl px-3 py-3 hover:bg-muted"
       >
         {live ? (
           <Thumbnail id={image.id} alt={HISTORY_COPY.thumbnailAlt(uploaded)} />
         ) : (
-          <div className="h-16 w-16 shrink-0 border border-border bg-muted" />
+          <div className="h-16 w-16 shrink-0 rounded-[3px] border-[3px] border-paper bg-muted shadow-lift" />
         )}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span
-              className={`inline-flex items-center border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${CHIP_TONES[chip.tone]}`}
+              className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${CHIP_TONES[chip.tone]}`}
             >
               {chip.label}
             </span>
             {score?.cached ? (
-              <span className="inline-flex items-center border border-border bg-background px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+              <span className="inline-flex items-center rounded-full border border-border bg-background px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
                 {HISTORY_COPY.cached}
               </span>
             ) : null}
@@ -120,11 +118,11 @@ function HistoryRow({ image, live }: { image: ImageDto; live: boolean }) {
           <LocalTime
             value={image.createdAt}
             mode="relative"
-            className="mt-1 block text-xs text-muted-foreground"
+            className="mt-1.5 block text-sm text-muted-foreground"
           />
         </div>
         {score?.score != null ? (
-          <span className="text-lg font-semibold tabular-nums">
+          <span className="num font-display text-4xl leading-none font-extrabold text-primary-text transition-transform duration-300 ease-out group-hover:scale-105">
             {score.score}
             <span className="sr-only"> {SCORE_COPY.scoreSuffix}</span>
           </span>
@@ -138,12 +136,12 @@ function SkeletonRow() {
   return (
     <li
       aria-hidden="true"
-      className="flex items-center gap-3 border-b border-border px-1 py-3"
+      className="flex items-center gap-4 px-3 py-3 motion-safe:animate-pulse"
     >
-      <div className="h-16 w-16 shrink-0 bg-muted" />
-      <div className="flex-1 space-y-2">
-        <div className="h-3 w-24 bg-muted" />
-        <div className="h-3 w-16 bg-muted" />
+      <div className="h-16 w-16 shrink-0 rounded-[3px] bg-muted" />
+      <div className="flex-1 space-y-2.5">
+        <div className="h-5 w-24 rounded-full bg-muted" />
+        <div className="h-3.5 w-16 rounded-full bg-muted" />
       </div>
     </li>
   );
@@ -151,7 +149,7 @@ function SkeletonRow() {
 
 function HistoryRows({ images, live }: { images: ImageDto[]; live: boolean }) {
   return (
-    <ul>
+    <ul className="-mx-3 space-y-1">
       {images.map((image) => (
         <HistoryRow key={image.id} image={image} live={live} />
       ))}
@@ -175,7 +173,7 @@ function PreloadedHistory({
 
   return (
     <section aria-labelledby="history-heading" className="min-w-0">
-      <h2 id="history-heading" className="mb-4 text-lg font-semibold">
+      <h2 id="history-heading" className="mb-5 font-display text-3xl font-extrabold">
         {UPLOAD_COPY.historyHeading}
       </h2>
       {page === null ? null : <HistoryRows images={page.page} live={false} />}
@@ -206,7 +204,7 @@ function LiveHistory({
 
   return (
     <section aria-labelledby="history-heading" className="min-w-0">
-      <h2 id="history-heading" className="mb-4 text-lg font-semibold">
+      <h2 id="history-heading" className="mb-5 font-display text-3xl font-extrabold">
         {UPLOAD_COPY.historyHeading}
       </h2>
 
@@ -222,7 +220,11 @@ function LiveHistory({
           </ul>
         </>
       ) : images.length === 0 ? (
-        <div className="border border-dashed border-border bg-muted/20 p-6 text-sm text-muted-foreground">
+        <div className="rounded-2xl border border-dashed border-input bg-muted/50 p-8 text-center text-muted-foreground">
+          <div
+            aria-hidden="true"
+            className="mx-auto mb-5 aspect-[5/3] w-28 rounded-[3px] border-[3px] border-paper bg-ink shadow-lift"
+          />
           {HISTORY_COPY.empty}
         </div>
       ) : (

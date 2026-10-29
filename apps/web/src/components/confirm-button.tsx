@@ -70,7 +70,7 @@ export function ConfirmButton({
           {pending && pendingLabel !== undefined ? pendingLabel : label}
         </Button>
         {disabledReason === undefined ? null : (
-          <p id={questionId} className="text-xs text-muted-foreground">
+          <p id={questionId} className="text-sm text-muted-foreground">
             {disabledReason}
           </p>
         )}
@@ -93,8 +93,8 @@ export function ConfirmButton({
   }
 
   return (
-    <div className="space-y-2">
-      <p id={questionId} className="text-sm">
+    <div className="space-y-3 rounded-2xl bg-card p-4 ring-1 ring-foreground/10">
+      <p id={questionId} className="text-sm font-medium">
         {question}
       </p>
       <div className="flex flex-wrap gap-2">

@@ -19,6 +19,7 @@ import {
   toUiError,
   type UiError,
 } from "@/lib/errors";
+import { useCountUp } from "@/lib/use-count-up";
 import { useWaitCountdown } from "@/lib/use-wait-countdown";
 
 function quotaResetAt(createdAt: number): number {
@@ -113,7 +114,7 @@ function Spinner() {
   return (
     <Loader2
       aria-hidden="true"
-      className="size-4 animate-spin motion-reduce:hidden"
+      className="size-4 animate-spin text-primary-text motion-reduce:hidden"
     />
   );
 }
@@ -122,13 +123,13 @@ function ScoreMeta({ score }: { score: ImageScoreDto }) {
   const confidence = confidencePercent(score.confidence);
 
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-muted-foreground">
       <span>{SCORE_COPY.scoredBy(SCORE_COPY.provider[score.provider])}</span>
       {confidence === null ? null : (
         <span>{SCORE_COPY.confidence(confidence)}</span>
       )}
       {score.cached ? (
-        <span className="border border-border px-1.5 py-0.5 text-[0.6875rem] text-foreground">
+        <span className="rounded-full bg-accent px-2.5 py-0.5 text-xs font-semibold text-accent-foreground">
           {SCORE_COPY.cached}
         </span>
       ) : null}
@@ -138,7 +139,7 @@ function ScoreMeta({ score }: { score: ImageScoreDto }) {
 
 function Processing() {
   return (
-    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+    <div className="flex w-fit items-center gap-2.5 rounded-full bg-muted px-4 py-2.5 text-sm font-medium text-muted-foreground">
       <Spinner />
       <p>{SCORE_COPY.checking}</p>
     </div>
@@ -147,7 +148,7 @@ function Processing() {
 
 function Scoring() {
   return (
-    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+    <div className="flex w-fit items-center gap-2.5 rounded-full bg-muted px-4 py-2.5 text-sm font-medium text-muted-foreground">
       <Spinner />
       <p>{SCORE_COPY.scoring}</p>
     </div>
@@ -155,12 +156,18 @@ function Scoring() {
 }
 
 function BigScore({ score }: { score: number }) {
+  const value = scoreValue(score);
+  const numeralRef = useCountUp(value, { duration: 1100, delay: 250 });
+
   return (
-    <p className="flex items-baseline gap-1">
-      <span className="text-5xl font-semibold tabular-nums">
-        {scoreValue(score)}
+    <p className="flex items-baseline gap-2.5">
+      <span
+        ref={numeralRef}
+        className="score-land num font-display text-8xl leading-[0.85] font-extrabold tracking-tight text-primary-text"
+      >
+        {value}
       </span>
-      <span className="text-sm text-muted-foreground">
+      <span className="text-base font-semibold text-muted-foreground">
         {SCORE_COPY.scoreSuffix}
       </span>
     </p>
@@ -468,12 +475,12 @@ export function ScorePanel({
   return (
     <section
       aria-labelledby="score-panel-heading"
-      className="min-w-0 space-y-4 border border-border bg-card p-4"
+      className="min-w-0 space-y-5 rounded-3xl bg-card p-5 shadow-lift ring-1 ring-foreground/10 sm:p-6"
     >
       <p role="status" aria-live="polite" className="sr-only">
         {announcement}
       </p>
-      <h2 id="score-panel-heading" className="text-sm font-medium">
+      <h2 id="score-panel-heading" className="font-display text-xl font-extrabold">
         {SCORE_COPY.panelHeading}
       </h2>
 
@@ -483,7 +490,7 @@ export function ScorePanel({
           width={image.width ?? undefined}
           height={image.height ?? undefined}
           alt={SCORE_COPY.previewAlt}
-          className="h-auto max-w-full object-contain"
+          className="mx-auto h-auto max-h-[20rem] max-w-full rounded-[3px] border-[10px] border-paper bg-paper object-contain shadow-strip"
         />
       ) : null}
 

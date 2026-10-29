@@ -498,12 +498,12 @@ export function Uploader() {
         : UPLOAD_COPY.uploadingPercent(progress);
 
   return (
-    <section aria-labelledby="uploader-heading" className="min-w-0 space-y-4">
-      <div className="space-y-1">
-        <h2 id="uploader-heading" className="text-lg font-semibold">
+    <section aria-labelledby="uploader-heading" className="min-w-0 space-y-5">
+      <div className="space-y-2">
+        <h2 id="uploader-heading" className="font-display text-3xl font-extrabold">
           {UPLOAD_COPY.heading}
         </h2>
-        <p className="text-sm text-muted-foreground">{UPLOAD_COPY.intro}</p>
+        <p className="max-w-md text-muted-foreground">{UPLOAD_COPY.intro}</p>
       </div>
 
       <div
@@ -542,20 +542,27 @@ export function Uploader() {
           aria-disabled={busy}
           tabIndex={-1}
           className={[
-            "flex min-h-40 cursor-pointer flex-col items-center justify-center gap-2 border border-dashed p-6 text-center",
-            "border-input bg-muted/30 hover:bg-muted/60",
-            "peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background",
-            dragging ? "border-ring bg-accent" : "",
+            "group relative flex min-h-56 cursor-pointer flex-col items-center justify-center gap-3 overflow-hidden rounded-3xl bg-ink p-8 text-center text-paper ring-1 ring-transparent dark:ring-paper/10",
+            "transition-[transform,box-shadow] duration-300 ease-out hover:shadow-lift",
+            "peer-focus-visible:ring-4 peer-focus-visible:ring-ring/50 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background",
+            dragging ? "scale-[1.015] shadow-lift ring-4 ring-lamp" : "",
             busy ? "cursor-not-allowed opacity-60" : "",
           ].join(" ")}
         >
-          <span className="inline-flex h-8 items-center border border-border bg-background px-3 text-xs font-medium">
+          <span
+            aria-hidden="true"
+            className={[
+              "absolute top-5 left-5 size-3 rounded-full bg-lamp",
+              busy ? "opacity-40" : "lamp",
+            ].join(" ")}
+          />
+          <span className="press inline-flex h-11 items-center rounded-full bg-lamp px-6 text-sm font-bold text-ink group-hover:-translate-y-px">
             {UPLOAD_COPY.choosePhoto}
           </span>
-          <span className="text-sm text-muted-foreground">
+          <span className="text-base font-medium text-paper/90">
             {dragging ? UPLOAD_COPY.dropActive : UPLOAD_COPY.dropHint}
           </span>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-sm text-paper/70">
             {UPLOAD_COPY.formats}
           </span>
         </label>
@@ -572,10 +579,10 @@ export function Uploader() {
                 aria-valuemax={100}
                 aria-valuenow={progress}
                 aria-label={UPLOAD_COPY.uploading}
-                className="h-1.5 w-full overflow-hidden bg-muted"
+                className="h-2 w-full overflow-hidden rounded-full bg-muted"
               >
                 <div
-                  className="h-full bg-primary transition-[width] duration-200 motion-reduce:transition-none"
+                  className="h-full rounded-full bg-primary transition-[width] duration-300 ease-out motion-reduce:transition-none"
                   style={{ width: `${progress}%` }}
                 />
               </div>
@@ -590,7 +597,7 @@ export function Uploader() {
       {error !== null ? (
         <div
           role="alert"
-          className="space-y-3 border border-destructive/40 bg-destructive/5 p-3"
+          className="space-y-3 rounded-2xl border border-destructive/30 bg-destructive/8 p-4"
         >
           <p className="text-sm text-destructive">{error.message}</p>
           {errorAction()}

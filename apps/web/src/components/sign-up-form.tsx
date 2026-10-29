@@ -60,8 +60,9 @@ export default function SignUpForm() {
   });
 
   return (
-    <div className="mx-auto mt-10 w-full max-w-md p-6">
-      <h1 className="mb-6 text-center text-3xl font-bold">Create account</h1>
+    <div className="curtain flex flex-1 items-center justify-center px-4 py-12 sm:py-16">
+    <div className="rise w-full max-w-md rounded-3xl bg-card p-7 text-card-foreground shadow-strip sm:p-10">
+      <h1 className="mb-8 text-4xl font-extrabold">Create account</h1>
 
       <form
         onSubmit={(event) => {
@@ -69,7 +70,7 @@ export default function SignUpForm() {
           event.stopPropagation();
           form.handleSubmit();
         }}
-        className="space-y-4"
+        className="space-y-2"
         noValidate
       >
         <form.Field
@@ -149,18 +150,19 @@ export default function SignUpForm() {
 
         <form.Subscribe selector={(state) => state.isSubmitting}>
           {(isSubmitting) => (
-            <Button type="submit" className="w-full" disabled={isSubmitting}>
+            <Button type="submit" size="lg" className="mt-2 w-full" disabled={isSubmitting}>
               {isSubmitting ? "Creating account..." : "Sign up"}
             </Button>
           )}
         </form.Subscribe>
       </form>
 
-      <div className="mt-4 text-center text-sm">
+      <div className="mt-6 text-center text-sm text-muted-foreground">
         Already have an account?{" "}
-        <Link href="/sign-in" className="text-primary underline-offset-4 hover:underline">
+        <Link href="/sign-in" className="font-semibold text-primary-text underline-offset-4 hover:underline">
           Sign in
         </Link>
+      </div>
       </div>
     </div>
   );

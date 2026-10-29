@@ -24,16 +24,16 @@ export default function AppError({
 
   if (authRequired) {
     return (
-      <div className="mx-auto w-full max-w-2xl px-4 py-8">
-        <p className="text-sm text-muted-foreground">Redirecting to sign in…</p>
+      <div className="mx-auto w-full max-w-2xl px-4 py-16 sm:px-6">
+        <p className="text-muted-foreground">Redirecting to sign in…</p>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 py-8">
-      <h1 className="mb-2 text-2xl font-semibold">Something went wrong</h1>
-      <p className="mb-4 text-sm text-muted-foreground">
+    <div className="mx-auto w-full max-w-2xl px-4 py-16 sm:px-6">
+      <h1 className="mb-3 text-4xl font-extrabold">Something went wrong</h1>
+      <p className="mb-6 text-muted-foreground">
         Your account could not be loaded. Try again.
       </p>
       <Button type="button" variant="outline" onClick={reset}>

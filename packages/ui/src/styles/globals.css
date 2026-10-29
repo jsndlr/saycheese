@@ -13,10 +13,219 @@
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply font-sans bg-background text-foreground;
-  }
   html {
     @apply font-sans;
+    accent-color: var(--primary);
+    caret-color: var(--primary);
+    color-scheme: light;
+    scrollbar-color: color-mix(in oklch, var(--foreground) 28%, transparent) transparent;
+    scrollbar-width: thin;
+    -webkit-tap-highlight-color: transparent;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  body {
+    @apply font-sans bg-background text-foreground;
+    font-optical-sizing: auto;
+    text-rendering: optimizeLegibility;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+  ::selection {
+    background: var(--lamp);
+    color: var(--ink);
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 3px;
+  }
+  /* Numerals in scores, dates and sizes line up and never jitter while they change. */
+  .num {
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings: "tnum" 1;
+  }
+}
+
+/*
+ * Motion. One authored moment per view: the strip prints, the frames flash in order,
+ * the score lands. Everything eases out exponentially from a visible default, and
+ * reduced motion shows the final state with no animation at all.
+ */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes strip-print {
+  from {
+    clip-path: inset(0 0 100% 0);
+    transform: translateY(-28px) rotate(var(--strip-tilt, 0deg));
+  }
+  /* Negative insets keep the strip's outer shadow inside the clip box once printed. */
+  to {
+    clip-path: inset(-4rem -4rem -4rem -4rem);
+    transform: translateY(0) rotate(var(--strip-tilt, 0deg));
+  }
+}
+
+@keyframes frame-flash {
+  0% {
+    background-color: var(--paper);
+    filter: brightness(1.6);
+  }
+  100% {
+    background-color: var(--ink);
+    filter: none;
+  }
+}
+
+@keyframes frame-content {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes score-land {
+  0% {
+    opacity: 0;
+    transform: translateY(0.18em) scale(0.9);
+    filter: blur(6px);
+  }
+  60% {
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+@keyframes lamp-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--lamp) 55%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 7px color-mix(in oklch, var(--lamp) 0%, transparent);
+  }
+}
+
+.rise {
+  animation: rise 0.8s var(--ease-out-expo) both;
+  animation-delay: var(--rise-delay, 0ms);
+}
+
+.strip-print {
+  animation: strip-print 1.15s var(--ease-out-expo) both;
+  animation-delay: var(--print-delay, 150ms);
+  /* The animation's end state; also what reduced motion and animation-less engines show. */
+  transform: rotate(var(--strip-tilt, 0deg));
+}
+
+.frame-flash {
+  animation: frame-flash 0.9s var(--ease-out-quart) both;
+  animation-delay: var(--flash-delay, 0ms);
+}
+
+.frame-content {
+  animation: frame-content 0.7s var(--ease-out-expo) both;
+  animation-delay: var(--content-delay, 0ms);
+}
+
+.score-land {
+  animation: score-land 0.9s var(--ease-out-expo) both;
+  animation-delay: var(--land-delay, 0ms);
+}
+
+.lamp {
+  animation: lamp-glow 2.4s ease-in-out infinite;
+}
+
+/* Sections rise into view as they scroll in; browsers without scroll timelines just show them. */
+@supports (animation-timeline: view()) {
+  .reveal {
+    animation: rise linear both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 45%;
+  }
+}
+
+/* A soft press on anything tappable. */
+.press {
+  transition:
+    transform 0.2s var(--ease-out-quart),
+    background-color 0.2s var(--ease-out-quart),
+    border-color 0.2s var(--ease-out-quart),
+    box-shadow 0.25s var(--ease-out-quart);
+}
+.press:active {
+  transform: scale(0.97);
+}
+
+/* Photo-strip frame: cut paper, a hairline print edge and a lifted shadow. */
+.strip-paper {
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: var(--shadow-strip);
+}
+
+/* Heavy curtain: deep folds drawn as soft vertical light, never stripes. */
+.curtain {
+  background-color: var(--curtain);
+  background-image:
+    linear-gradient(
+      90deg,
+      color-mix(in oklch, var(--ink) 34%, transparent) 0%,
+      transparent 9%,
+      color-mix(in oklch, var(--paper) 9%, transparent) 17%,
+      transparent 27%,
+      color-mix(in oklch, var(--ink) 26%, transparent) 38%,
+      transparent 46%,
+      color-mix(in oklch, var(--paper) 8%, transparent) 58%,
+      transparent 68%,
+      color-mix(in oklch, var(--ink) 30%, transparent) 80%,
+      transparent 88%,
+      color-mix(in oklch, var(--ink) 38%, transparent) 100%
+    ),
+    linear-gradient(180deg, color-mix(in oklch, var(--ink) 30%, transparent), transparent 22%);
+  color: var(--curtain-foreground);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise,
+  .reveal,
+  .strip-print,
+  .frame-flash,
+  .frame-content,
+  .score-land,
+  .lamp {
+    animation: none;
+  }
+  .press,
+  .press:active {
+    transition: none;
+    transform: none;
   }
 }

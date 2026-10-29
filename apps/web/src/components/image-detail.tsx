@@ -107,49 +107,49 @@ function DetailContent({
   const router = useRouter();
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:py-8">
+    <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
       <Link
         href="/app"
-        className="text-sm text-muted-foreground underline-offset-4 hover:underline"
+        className="press -ml-3 inline-flex items-center rounded-full px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
       >
         ← {IMAGE_DETAIL_COPY.back}
       </Link>
-      <h1 className="mt-4 mb-6 text-2xl font-semibold">
+      <h1 className="mt-4 mb-8 text-4xl font-extrabold sm:text-5xl">
         {IMAGE_DETAIL_COPY.heading}
       </h1>
 
-      <div className="grid grid-cols-1 gap-8 min-[720px]:grid-cols-2">
+      <div className="grid grid-cols-1 gap-8 min-[900px]:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] min-[900px]:gap-10">
         <ScorePanel
           image={image}
           previewUrl={previewUrl}
           onChangeFile={() => router.push("/app")}
         />
 
-        <div className="space-y-4 self-start border border-border bg-card p-4">
-          <dl className="space-y-3 text-sm">
-            <div>
-              <dt className="text-xs text-muted-foreground">
+        <div className="space-y-6 self-start rounded-3xl bg-muted/60 p-5 sm:p-6">
+          <dl className="divide-y divide-border text-sm">
+            <div className="pb-3">
+              <dt className="text-xs font-medium text-muted-foreground">
                 {IMAGE_DETAIL_COPY.uploaded}
               </dt>
-              <dd>
+              <dd className="mt-1 text-base font-medium">
                 <LocalTime value={image.createdAt} />
               </dd>
             </div>
-            <div>
-              <dt className="text-xs text-muted-foreground">
+            <div className="py-3">
+              <dt className="text-xs font-medium text-muted-foreground">
                 {IMAGE_DETAIL_COPY.dimensions}
               </dt>
-              <dd>
+              <dd className="mt-1 text-base font-medium">
                 {image.width !== null && image.height !== null
                   ? IMAGE_DETAIL_COPY.dimensionsValue(image.width, image.height)
                   : IMAGE_DETAIL_COPY.unknownValue}
               </dd>
             </div>
-            <div>
-              <dt className="text-xs text-muted-foreground">
+            <div className="pt-3">
+              <dt className="text-xs font-medium text-muted-foreground">
                 {IMAGE_DETAIL_COPY.size}
               </dt>
-              <dd>{formatBytes(image.bytes)}</dd>
+              <dd className="mt-1 text-base font-medium">{formatBytes(image.bytes)}</dd>
             </div>
           </dl>
           <ArchiveAction image={image} suspend={suspend} />
@@ -173,14 +173,17 @@ class DetailBoundary extends Component<
   render() {
     if (!this.state.missing) return this.props.children;
     return (
-      <div className="mx-auto w-full max-w-2xl px-4 py-8">
-        <h1 className="mb-2 text-2xl font-semibold">
+      <div className="mx-auto w-full max-w-2xl px-4 py-16 sm:px-6">
+        <h1 className="mb-3 text-4xl font-extrabold">
           {IMAGE_DETAIL_COPY.notFoundHeading}
         </h1>
-        <p className="mb-4 text-sm text-muted-foreground">
+        <p className="mb-6 text-muted-foreground">
           {IMAGE_DETAIL_COPY.notFound}
         </p>
-        <Link href="/app" className="text-sm underline underline-offset-4">
+        <Link
+          href="/app"
+          className="press inline-flex h-11 items-center rounded-full bg-foreground px-6 text-sm font-semibold text-background hover:-translate-y-px hover:shadow-lift"
+        >
           {IMAGE_DETAIL_COPY.back}
         </Link>
       </div>

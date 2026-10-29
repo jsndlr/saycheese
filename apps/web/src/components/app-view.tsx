@@ -29,18 +29,18 @@ function AccountDetails({
   preloadedImages: Preloaded<typeof api.queries.images.list>;
 }) {
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:py-8">
+    <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
       <h1 className="sr-only">saycheese</h1>
-      <header className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
+      <header className="mb-10 flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-muted/70 px-5 py-3.5">
         <div className="min-w-0">
           <p className="text-xs text-muted-foreground">{UPLOAD_COPY.signedInAs}</p>
-          <p className="break-words text-sm font-medium">{email}</p>
+          <p className="break-words text-sm font-semibold">{email}</p>
           <p className="text-xs text-muted-foreground">
             {UPLOAD_COPY.release(release)}
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Button type="button" variant="outline" onClick={onSignOut}>
+          <Button type="button" variant="outline" size="sm" onClick={onSignOut}>
             {UPLOAD_COPY.signOut}
           </Button>
           {signOutError ? (
@@ -51,7 +51,7 @@ function AccountDetails({
         </div>
       </header>
 
-      <div className="grid grid-cols-1 gap-8 min-[720px]:grid-cols-2">
+      <div className="grid grid-cols-1 gap-12 min-[900px]:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] min-[900px]:gap-14">
         <Uploader />
         <ImageHistory preloaded={preloadedImages} next="/app" />
       </div>
