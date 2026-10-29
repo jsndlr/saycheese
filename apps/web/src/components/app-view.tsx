@@ -4,10 +4,11 @@ import { api } from "@saycheese/backend/convex/_generated/api";
 import { Button } from "@saycheese/ui/components/button";
 import { preloadedQueryResult } from "convex/nextjs";
 import type { Preloaded } from "convex/react";
-import { useConvexAuth, usePreloadedQuery } from "convex/react";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { usePreloadedQuery } from "convex/react";
+import { useState } from "react";
 
+import { AuthGate } from "@/components/auth-gate";
+import { ImageHistory } from "@/components/image-history";
 import { Uploader } from "@/components/uploader";
 import { authClient } from "@/lib/auth-client";
 import { UPLOAD_COPY } from "@/lib/copy";
@@ -19,11 +20,13 @@ function AccountDetails({
   release,
   signOutError,
   onSignOut,
+  preloadedImages,
 }: {
   email: string;
   release: string;
   signOutError: string | null;
   onSignOut: () => void;
+  preloadedImages: Preloaded<typeof api.queries.images.list>;
 }) {
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:py-8">
@@ -50,27 +53,48 @@ function AccountDetails({
 
       <div className="grid grid-cols-1 gap-8 min-[720px]:grid-cols-2">
         <Uploader />
-
-        {/* Task 3 replaces this placeholder with the paginated history. */}
-        <section aria-labelledby="history-heading" className="min-w-0">
-          <h2 id="history-heading" className="mb-4 text-lg font-semibold">
-            {UPLOAD_COPY.historyHeading}
-          </h2>
-          <div className="border border-dashed border-border bg-muted/20 p-6 text-sm text-muted-foreground">
-            {UPLOAD_COPY.historyPlaceholder}
-          </div>
-        </section>
+        <ImageHistory preloaded={preloadedImages} next="/app" />
       </div>
     </div>
   );
 }
 
-function SubscribedAccountDetails({
+/**
+ * The preloaded branch. It subscribes to nothing, so it is safe to paint while
+ * Convex auth is still resolving — or before the browser has a token at all.
+ */
+function PreloadedAccountDetails({
   preloaded,
+  preloadedImages,
   signOutError,
   onSignOut,
 }: {
   preloaded: Preloaded<typeof api.queries.me.current>;
+  preloadedImages: Preloaded<typeof api.queries.images.list>;
+  signOutError: string | null;
+  onSignOut: () => void;
+}) {
+  const initial = preloadedQueryResult(preloaded);
+
+  return (
+    <AccountDetails
+      email={initial.user.email}
+      release={initial.release}
+      signOutError={signOutError}
+      onSignOut={onSignOut}
+      preloadedImages={preloadedImages}
+    />
+  );
+}
+
+function SubscribedAccountDetails({
+  preloaded,
+  preloadedImages,
+  signOutError,
+  onSignOut,
+}: {
+  preloaded: Preloaded<typeof api.queries.me.current>;
+  preloadedImages: Preloaded<typeof api.queries.images.list>;
   signOutError: string | null;
   onSignOut: () => void;
 }) {
@@ -82,27 +106,22 @@ function SubscribedAccountDetails({
       release={release}
       signOutError={signOutError}
       onSignOut={onSignOut}
+      preloadedImages={preloadedImages}
     />
   );
 }
 
 export default function AppView({
   preloaded,
+  preloadedImages,
 }: {
   preloaded: Preloaded<typeof api.queries.me.current>;
+  preloadedImages: Preloaded<typeof api.queries.images.list>;
 }) {
-  const router = useRouter();
-  const { isAuthenticated, isLoading } = useConvexAuth();
   // Set synchronously before the session is cleared so the authed subscription
   // unmounts instead of re-running as an unauthenticated query.
   const [leaving, setLeaving] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.replace("/sign-in?next=/app");
-    }
-  }, [isAuthenticated, isLoading, router]);
 
   async function handleSignOut() {
     setSignOutError(null);
@@ -120,38 +139,29 @@ export default function AppView({
       setSignOutError(SIGN_OUT_ERROR);
       return;
     }
-
-    router.replace("/sign-in");
-    router.refresh();
-  }
-
-  if (leaving) {
-    return null;
-  }
-
-  // While Convex auth is still loading, paint the server-preloaded payload
-  // without subscribing, so the email is visible on the first frame.
-  if (isLoading) {
-    const initial = preloadedQueryResult(preloaded);
-    return (
-      <AccountDetails
-        email={initial.user.email}
-        release={initial.release}
-        signOutError={signOutError}
-        onSignOut={handleSignOut}
-      />
-    );
-  }
-
-  if (!isAuthenticated) {
-    return null;
+    // AuthGate sees the cleared session and replaces the route with sign-in.
   }
 
   return (
-    <SubscribedAccountDetails
-      preloaded={preloaded}
-      signOutError={signOutError}
-      onSignOut={handleSignOut}
-    />
+    <AuthGate
+      next="/app"
+      fallback={
+        <PreloadedAccountDetails
+          preloaded={preloaded}
+          preloadedImages={preloadedImages}
+          signOutError={signOutError}
+          onSignOut={handleSignOut}
+        />
+      }
+    >
+      {leaving ? null : (
+        <SubscribedAccountDetails
+          preloaded={preloaded}
+          preloadedImages={preloadedImages}
+          signOutError={signOutError}
+          onSignOut={handleSignOut}
+        />
+      )}
+    </AuthGate>
   );
 }

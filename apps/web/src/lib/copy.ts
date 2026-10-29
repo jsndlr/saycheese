@@ -16,7 +16,6 @@ export const UPLOAD_COPY = {
   deduplicated: "You already uploaded this photo",
   resultLoading: "Loading your result…",
   historyHeading: "Your history",
-  historyPlaceholder: "Your photo history will appear here.",
   signedInAs: "Signed in as",
   signOut: "Sign out",
   retry: "Try again",
@@ -24,6 +23,38 @@ export const UPLOAD_COPY = {
   changeFile: "Choose another photo",
   signIn: "Sign in",
   release: (release: string) => `Scoring config release ${release}`,
+} as const;
+
+export const HISTORY_COPY = {
+  empty: "No photos yet. Upload one to get a score.",
+  loading: "Loading your photos…",
+  loadingMore: "Loading more photos…",
+  loadMore: "Load more",
+  cached: "Cached",
+  thumbnailAlt: (uploaded: string) => `Photo uploaded ${uploaded}`,
+  status: {
+    uploaded: "Uploading",
+    processing: "Processing",
+    scoring: "Scoring",
+    scored: "Scored",
+    failed: "Failed",
+    noFace: "No face",
+    multipleFaces: "Multiple faces",
+    lowQuality: "Low quality",
+    unavailable: "Unavailable",
+  },
+} as const;
+
+export const IMAGE_DETAIL_COPY = {
+  heading: "Photo details",
+  back: "Back to your photos",
+  uploaded: "Uploaded",
+  dimensions: "Dimensions",
+  size: "Size",
+  dimensionsValue: (width: number, height: number) => `${width} × ${height} px`,
+  unknownValue: "Not available",
+  notFoundHeading: "Photo not found",
+  notFound: "This photo is not available.",
 } as const;
 
 export const SCORE_COPY = {
@@ -45,6 +76,7 @@ export const SCORE_COPY = {
   lowQualityFallback: "Photo quality is too low to score",
   unavailableFallback: "Scoring is unavailable",
   quotaReset: (when: string) => `Your daily limit resets on ${when}.`,
+  quotaResetPrefix: "Your daily limit resets on",
   quotaResetPassed: "Your daily limit has reset. Rescore this photo.",
   rescore: "Try scoring again",
   changeFile: "Choose another photo",

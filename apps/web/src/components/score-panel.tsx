@@ -10,7 +10,9 @@ import { Loader2 } from "@saycheese/ui/lib/icons";
 import { useMutation } from "convex/react";
 import { useEffect, useRef, useState } from "react";
 
+import { LocalTime } from "@/components/local-time";
 import { SCORE_COPY } from "@/lib/copy";
+import { formatLocalTime } from "@/lib/relative-time";
 import {
   formatRetryAfter,
   toUiError,
@@ -27,13 +29,6 @@ function quotaResetAt(createdAt: number): number {
   );
 }
 
-function formatQuotaReset(resetAt: number): string {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(resetAt));
-}
-
 /**
  * A quota window belongs to the score row. Revisiting an old row after its
  * window has ended must not claim a future reset, so the copy is derived from
@@ -43,7 +38,7 @@ function quotaResetCopy(score: ImageScoreDto, now = Date.now()): string {
   const resetAt = quotaResetAt(score.createdAt);
   return now >= resetAt
     ? SCORE_COPY.quotaResetPassed
-    : SCORE_COPY.quotaReset(formatQuotaReset(resetAt));
+    : SCORE_COPY.quotaReset(formatLocalTime(resetAt));
 }
 
 function scoreValue(value: number): number {
@@ -236,7 +231,13 @@ function Unavailable({
         <p className="text-sm">{scoreReason(score)}</p>
         {image.quotaExceeded ? (
           <p className="text-xs text-muted-foreground">
-            {quotaResetCopy(score, now)}
+            {now >= resetAt ? (
+              SCORE_COPY.quotaResetPassed
+            ) : (
+              <>
+                {SCORE_COPY.quotaResetPrefix} <LocalTime value={resetAt} />.
+              </>
+            )}
           </p>
         ) : null}
       </div>
