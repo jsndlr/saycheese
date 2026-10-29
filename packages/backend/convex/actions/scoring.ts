@@ -52,7 +52,10 @@ import { unavailableResult } from "../internal/scoring";
  * the primary, misses, and pays one extra call; multi-provider cache lookups
  * are deliberately out of scope for this phase.
  *
- * No per-user rate limit yet (task 6).
+ * Daily quota: after the cache miss, `claimDailyScore` consumes one unit of
+ * the owner's `SMILE_DAILY_QUOTA` budget. A denied claim records an
+ * `unavailable` score with the SCORING_QUOTA reason and `quotaExceeded: true`
+ * and stops before any provider is constructed. Cache hits never consume.
  */
 
 type ProviderCall =
@@ -189,10 +192,17 @@ function toScoreResult(
 }
 
 export const score = internalAction({
-  args: { imageId: v.id("images") },
-  handler: async (ctx, { imageId }) => {
+  // `run` is the image's scoring generation: a job from an older run can
+  // never settle a newer one. `force` comes from an explicit rescore: skip the
+  // cache lookup and replace the cacheable row with this run's result.
+  // `run` has no legacy fallback: on 2026-10-29 prod had 0 images and dev had
+  // no queued scoring job (only the seeded timestamp-less row), so no job was
+  // enqueued without it.
+  args: { imageId: v.id("images"), run: v.number(), force: v.optional(v.boolean()) },
+  handler: async (ctx, { imageId, run, force }) => {
     const target = await ctx.runQuery(internal.internal.scoring.load, {
       imageId,
+      run,
     });
     if (target === null) {
       // Not `scoring` any more, or no variant to read: a duplicate run is a
@@ -202,13 +212,45 @@ export const score = internalAction({
 
     const order = providerOrder(env);
     const primaryName: ProviderName = order[0];
-    const cached = await ctx.runMutation(internal.internal.scoring.tryCached, {
-      imageId,
-      provider: primaryName,
-      configVersion: env.SCORING_CONFIG_VERSION,
-    });
-    if (cached) {
-      log("image.scoring.cached", { imageId, provider: primaryName });
+    if (force !== true) {
+      const cached = await ctx.runMutation(internal.internal.scoring.tryCached, {
+        imageId,
+        run,
+        provider: primaryName,
+        configVersion: env.SCORING_CONFIG_VERSION,
+      });
+      if (cached) {
+        log("image.scoring.cached", { imageId, provider: primaryName });
+        return;
+      }
+    }
+
+    // Consumed only when a provider call is about to be attempted, and in a
+    // mutation so a rolled-back run cannot leak budget.
+    const budget = await ctx.runMutation(
+      internal.internal.scoring.claimDailyScore,
+      { imageId, run },
+    );
+    if (budget.skipped) {
+      return;
+    }
+    if (!budget.ok) {
+      const recorded = await ctx.runMutation(
+        internal.internal.scoring.recordQuotaExceeded,
+        {
+          imageId,
+          run,
+          provider: primaryName,
+          providerModel: "unknown",
+          configVersion: env.SCORING_CONFIG_VERSION,
+        },
+      );
+      log("image.scoring.quota_exceeded", {
+        imageId,
+        provider: primaryName,
+        retryAfterMs: budget.retryAfterMs,
+        recorded,
+      });
       return;
     }
 
@@ -225,8 +267,10 @@ export const score = internalAction({
       });
       const recorded = await ctx.runMutation(internal.internal.scoring.record, {
         imageId,
+        run,
         result,
         attempts,
+        force,
       });
       log("image.scoring.result", {
         imageId,
@@ -346,8 +390,10 @@ export const score = internalAction({
           const result = toScoreResult(provider, call.result, env.SCORING_CONFIG_VERSION);
           const recorded = await ctx.runMutation(internal.internal.scoring.record, {
             imageId,
+            run,
             result,
             attempts,
+            force,
           });
           log("image.scoring.result", {
             imageId,

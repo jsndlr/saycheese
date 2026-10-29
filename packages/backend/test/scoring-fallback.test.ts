@@ -1,3 +1,4 @@
+import { register as registerRateLimiter } from "@convex-dev/rate-limiter/test";
 import { convexTest } from "convex-test";
 import type { TestConvex } from "convex-test";
 import { makeFunctionReference } from "convex/server";
@@ -74,7 +75,7 @@ const modules = import.meta.glob("../convex/**/*.ts");
 
 type Test = TestConvex<typeof schema>;
 
-const score = makeFunctionReference<"action", { imageId: Id<"images"> }, void>(
+const score = makeFunctionReference<"action", { imageId: Id<"images">; run: number }, void>(
   "actions/scoring:score",
 );
 
@@ -95,6 +96,7 @@ async function insertScoringImage(t: Test) {
       height: 100,
       status: "scoring",
       scoringStartedAt: Date.now(),
+      scoringRun: 1,
       createdAt: 1_700_000_000_000,
     });
     return imageId;
@@ -126,12 +128,13 @@ beforeEach(() => {
 
 it("T-SCR-13 falls back to Vision after two retryable Rekognition failures", async () => {
   const t = convexTest(schema, modules);
+  registerRateLimiter(t, "rateLimiter");
   const imageId = await insertScoringImage(t);
 
   mocks.primaryScore.mockRejectedValue(retryable());
   mocks.fallbackScore.mockResolvedValue(visionResult);
 
-  await t.action(score, { imageId });
+  await t.action(score, { imageId, run: 1 });
 
   const { scores, attempts, audits } = await t.run(async (ctx) => ({
     scores: await ctx.db.query("scores").collect(),
@@ -159,11 +162,12 @@ it("T-SCR-13 falls back to Vision after two retryable Rekognition failures", asy
 
 it("T-SCR-13 a fatal primary error does not call the fallback", async () => {
   const t = convexTest(schema, modules);
+  registerRateLimiter(t, "rateLimiter");
   const imageId = await insertScoringImage(t);
 
   mocks.primaryScore.mockRejectedValue(fatal());
 
-  await t.action(score, { imageId });
+  await t.action(score, { imageId, run: 1 });
 
   const { scores, attempts, audits } = await t.run(async (ctx) => ({
     scores: await ctx.db.query("scores").collect(),
@@ -185,6 +189,7 @@ it("T-SCR-13 a fatal primary error does not call the fallback", async () => {
 
 it("T-SCR-13 records every attempt when both providers fail", async () => {
   const t = convexTest(schema, modules);
+  registerRateLimiter(t, "rateLimiter");
   const imageId = await insertScoringImage(t);
 
   mocks.primaryScore.mockRejectedValue(retryable());
@@ -192,7 +197,7 @@ it("T-SCR-13 records every attempt when both providers fail", async () => {
     new ProviderError("retryable", "vision_unavailable", "down"),
   );
 
-  await t.action(score, { imageId });
+  await t.action(score, { imageId, run: 1 });
 
   const { scores, attempts, audits } = await t.run(async (ctx) => ({
     scores: await ctx.db.query("scores").collect(),
@@ -217,12 +222,13 @@ it("T-SCR-13 records every attempt when both providers fail", async () => {
 
 it("T-SCR-13 skips a fallback that cannot be constructed", async () => {
   const t = convexTest(schema, modules);
+  registerRateLimiter(t, "rateLimiter");
   const imageId = await insertScoringImage(t);
 
   mocks.fallbackAvailable = false;
   mocks.primaryScore.mockRejectedValue(retryable());
 
-  await t.action(score, { imageId });
+  await t.action(score, { imageId, run: 1 });
 
   const { scores, attempts } = await t.run(async (ctx) => ({
     scores: await ctx.db.query("scores").collect(),
@@ -242,12 +248,13 @@ it("T-SCR-13 skips a fallback that cannot be constructed", async () => {
 
 it("T-SCR-13 a failing fallback is not retried beyond the remaining budget", async () => {
   const t = convexTest(schema, modules);
+  registerRateLimiter(t, "rateLimiter");
   const imageId = await insertScoringImage(t);
 
   mocks.primaryScore.mockRejectedValue(retryable());
   mocks.fallbackScore.mockRejectedValue(fatal());
 
-  await t.action(score, { imageId });
+  await t.action(score, { imageId, run: 1 });
 
   const { scores, attempts } = await t.run(async (ctx) => ({
     scores: await ctx.db.query("scores").collect(),

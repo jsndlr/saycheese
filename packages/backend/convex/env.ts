@@ -6,6 +6,9 @@ const logLevelSchema = z.enum(["debug", "info", "warn", "error"]);
 const envSchema = z
   .object({
     BETTER_AUTH_SECRET: z.string().min(32),
+    // Shared secret the Next auth proxy presents. Optional: when absent, every
+    // sign-in is keyed under the shared `direct` bucket (safe default).
+    AUTH_PROXY_SECRET: z.string().min(32).optional(),
     SITE_URL: z.url({ protocol: /^https?$/ }),
     SMILE_PROVIDER: providerSchema.default("stub"),
     SMILE_DAILY_QUOTA: z.coerce.number().int().positive().default(100),

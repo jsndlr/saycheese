@@ -1,8 +1,8 @@
 import type { GenericCtx } from "@convex-dev/better-auth";
 import { can, type Permission } from "@saycheese/core/access";
-import { errorPayload, type ErrorCode } from "@saycheese/core/errors";
+import { errorPayload, type ErrorCode, type ErrorDetail } from "@saycheese/core/errors";
 import { zCustomMutation, zCustomQuery } from "convex-helpers/server/zod4";
-import { ConvexError } from "convex/values";
+import { ConvexError, type Value } from "convex/values";
 
 import type { DataModel } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
@@ -17,9 +17,13 @@ export type AuthedUser = {
 
 type AuthedCtx = { user: AuthedUser };
 
-export function fail(code: ErrorCode): never {
-  const payload = errorPayload(code);
-  throw new ConvexError({ code: payload.code, message: payload.message });
+export function fail(code: ErrorCode, detail?: ErrorDetail): never {
+  const payload = errorPayload(code, detail);
+  throw new ConvexError({
+    code: payload.code,
+    message: payload.message,
+    ...(payload.detail === undefined ? {} : { detail: payload.detail }),
+  } as Value);
 }
 
 function rolesOf(user: object): string[] {

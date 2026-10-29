@@ -1,5 +1,6 @@
 import type { ComponentApi } from "@convex-dev/better-auth/_generated/component.js";
 import { register } from "@convex-dev/better-auth/test";
+import { register as registerRateLimiter } from "@convex-dev/rate-limiter/test";
 import { register as registerWorkpool } from "@convex-dev/workpool/test";
 import { MAX_UPLOAD_BYTES, UPLOAD_COMMIT_GRACE_MS, UPLOAD_URL_TTL_MS } from "@saycheese/core/limits";
 import { convexTest } from "convex-test";
@@ -131,6 +132,7 @@ async function storageExists(t: Test, storageId: Id<"_storage">) {
 
 it("T-API-01 requires auth and hands out a one-hour upload URL", async () => {
   const t = convexTest(schema, modules);
+  registerRateLimiter(t, "rateLimiter");
   const { asUser } = await signedIn(t);
   const probe = encoder.encode("anonymous probe");
   const storageId = await store(t, probe);
@@ -161,6 +163,7 @@ it("T-API-01 requires auth and hands out a one-hour upload URL", async () => {
 
 it("T-API-02 commits one uploaded row, one audit row, and the process job", async () => {
   const t = convexTest(schema, modules);
+  registerRateLimiter(t, "rateLimiter");
   registerWorkpool(t, "scoringPool");
   const { user, asUser } = await signedIn(t);
   const bytes = encoder.encode("say cheese");
@@ -211,6 +214,7 @@ it("T-API-02 commits one uploaded row, one audit row, and the process job", asyn
 
 it("T-API-03 deduplicates per user and never duplicates rows or jobs", async () => {
   const t = convexTest(schema, modules);
+  registerRateLimiter(t, "rateLimiter");
   registerWorkpool(t, "scoringPool");
   const component = register(t, "betterAuth");
   const { user: userA, asUser: asA } = await createAccount(t, component, "a@example.test");
@@ -264,6 +268,7 @@ it("T-API-03 deduplicates per user and never duplicates rows or jobs", async () 
 
 it("rejects a declared sha256 that disagrees with storage without writing a row", async () => {
   const t = convexTest(schema, modules);
+  registerRateLimiter(t, "rateLimiter");
   const { asUser } = await signedIn(t);
   const bytes = encoder.encode("hash mismatch");
   const storageId = await store(t, bytes);
@@ -286,6 +291,7 @@ it("rejects a declared sha256 that disagrees with storage without writing a row"
 
 it("rejects declared bytes that disagree with storage without writing a row", async () => {
   const t = convexTest(schema, modules);
+  registerRateLimiter(t, "rateLimiter");
   const { asUser } = await signedIn(t);
   const bytes = encoder.encode("size mismatch");
   const storageId = await store(t, bytes);
@@ -306,6 +312,7 @@ it("rejects declared bytes that disagree with storage without writing a row", as
 
 it("rejects a declared HEIC upload with HEIC_UNSUPPORTED", async () => {
   const t = convexTest(schema, modules);
+  registerRateLimiter(t, "rateLimiter");
   const { asUser } = await signedIn(t);
   const bytes = encoder.encode("heic bytes");
   const storageId = await store(t, bytes);
@@ -334,6 +341,7 @@ it("rejects a declared HEIC upload with HEIC_UNSUPPORTED", async () => {
 
 it("rejects a MIME type outside the core allowlist", async () => {
   const t = convexTest(schema, modules);
+  registerRateLimiter(t, "rateLimiter");
   const { asUser } = await signedIn(t);
   const bytes = encoder.encode("gif bytes");
   const storageId = await store(t, bytes);
@@ -354,6 +362,7 @@ it("rejects a MIME type outside the core allowlist", async () => {
 
 it("rejects an unknown storage id with NOT_FOUND", async () => {
   const t = convexTest(schema, modules);
+  registerRateLimiter(t, "rateLimiter");
   const { asUser } = await signedIn(t);
   const bytes = encoder.encode("gone");
   const storageId = await store(t, bytes);
@@ -374,6 +383,7 @@ it("rejects an unknown storage id with NOT_FOUND", async () => {
 
 it("rejects reuse of a storage id already bound to an image", async () => {
   const t = convexTest(schema, modules);
+  registerRateLimiter(t, "rateLimiter");
   const { asUser } = await signedIn(t);
   const bytes = encoder.encode("reuse");
   const storageId = await store(t, bytes);
@@ -391,6 +401,7 @@ it("rejects reuse of a storage id already bound to an image", async () => {
 
 it("rejects committing any processed variant owned by another image", async () => {
   const t = convexTest(schema, modules);
+  registerRateLimiter(t, "rateLimiter");
   const component = register(t, "betterAuth");
   const { user: victim } = await createAccount(t, component, "victim@example.test");
   const { user: attacker, asUser: asAttacker } = await createAccount(
@@ -460,6 +471,7 @@ it("rejects committing any processed variant owned by another image", async () =
 
 it("rejects an upload older than the URL lifetime plus grace", async () => {
   const t = convexTest(schema, modules);
+  registerRateLimiter(t, "rateLimiter");
   const { asUser } = await signedIn(t);
   const bytes = encoder.encode("stale upload");
   const sha256 = await sha256Hex(bytes);
@@ -490,6 +502,7 @@ it("rejects an upload older than the URL lifetime plus grace", async () => {
 
 it("rejects an object over the byte cap", async () => {
   const t = convexTest(schema, modules);
+  registerRateLimiter(t, "rateLimiter");
   const { asUser } = await signedIn(t);
   const bytes = new Uint8Array(MAX_UPLOAD_BYTES + 1);
   const sha256 = await sha256Hex(bytes);

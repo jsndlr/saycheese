@@ -120,6 +120,14 @@ Bun's automatic env loading is disabled in `bunfig.toml`; the framework integrat
 
 Run standalone Node/Bun tools that use Varlock from the owning app directory so they load that app's schema and env files. `env:generate` only generates TypeScript files; it does not initialize environment values in a subsequent command.
 
+### Auth proxy secret
+
+`AUTH_PROXY_SECRET` (at least 32 characters) is shared by the Next auth route and the Convex deployment. The route (`apps/web/src/app/api/auth/[...all]/route.ts`) strips any client-sent `x-saycheese-*` headers, then sets `x-saycheese-client-ip` from the platform address and `x-saycheese-proxy-secret` from this value. Convex (`packages/backend/convex/auth.ts`) trusts the IP header only when the secret matches in constant time; otherwise the sign-in limiter keys every request under `direct`. The per-email key always applies. Set it in Vercel for production and preview and in the matching Convex deployment; when it is absent on Convex, all unproxied sign-ins share the `direct` bucket (safe default).
+
+## Rate limits
+
+Plan 6.3 uses `@convex-dev/rate-limiter` (`packages/backend/convex/lib/rateLimits.ts`): sign-in 10 per 15 min per normalised email and client IP (fixed window), upload and rescore 10/30 per hour per user (token bucket with the stated capacity), and scoring `SMILE_DAILY_QUOTA` per day per user (fixed window aligned to UTC midnight). Upload consumption is charged per committed upload (`commitUpload`), because one minted URL can be reused; `createUpload` has a separate, looser URL-minting limit. A dedupe hit creates nothing and does not consume. The daily score budget is consumed after the cache lookup, immediately before a provider call; a cache hit is free, and an exhausted budget settles the image as `scored` with an `unavailable` SCORING_QUOTA score, `quotaExceeded: true`, and its variants intact. Rescoring an image whose last score is an unavailable outage inside `SCORING_OUTAGE_WINDOW_MS` is refused with `SCORING_UNAVAILABLE` before the limiter: the rejection performs no provider work and does not spend the user's allowance.
+
 ## Smile scoring providers
 
 The repository defaults to the deterministic stub (`SMILE_PROVIDER=stub`); it needs no network or credentials. AWS Rekognition is opt-in:

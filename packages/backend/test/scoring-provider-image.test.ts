@@ -1,3 +1,4 @@
+import { register as registerRateLimiter } from "@convex-dev/rate-limiter/test";
 import { convexTest } from "convex-test";
 import type { TestConvex } from "convex-test";
 import { fileTypeFromBuffer } from "file-type";
@@ -72,7 +73,7 @@ vi.mock("../convex/lib/scoringPolicy", () => ({
 }));
 
 const modules = import.meta.glob("../convex/**/*.ts");
-const score = makeFunctionReference<"action", { imageId: Id<"images"> }, void>(
+const score = makeFunctionReference<"action", { imageId: Id<"images">; run: number }, void>(
   "actions/scoring:score",
 );
 
@@ -104,6 +105,7 @@ async function insertWebpImage(t: Test): Promise<Id<"images">> {
       height: 48,
       status: "scoring" as Doc<"images">["status"],
       scoringStartedAt: Date.now(),
+      scoringRun: 1,
       createdAt: 1_700_000_000_000,
     });
   });
@@ -113,9 +115,10 @@ it("converts the stored WebP to JPEG before calling a JPEG-only provider", async
   recorder.calls = [];
   recorder.failuresLeft = 0;
   const t = convexTest(schema, modules);
+  registerRateLimiter(t, "rateLimiter");
   const imageId = await insertWebpImage(t);
 
-  await t.action(score, { imageId });
+  await t.action(score, { imageId, run: 1 });
 
   expect(recorder.calls).toHaveLength(1);
   const call = recorder.calls[0];
@@ -134,9 +137,10 @@ it("converts once per action, not once per retry", async () => {
   recorder.calls = [];
   recorder.failuresLeft = 1;
   const t = convexTest(schema, modules);
+  registerRateLimiter(t, "rateLimiter");
   const imageId = await insertWebpImage(t);
 
-  await t.action(score, { imageId });
+  await t.action(score, { imageId, run: 1 });
 
   expect(recorder.calls).toHaveLength(2);
   expect(recorder.calls.map((call) => call.mime)).toEqual([

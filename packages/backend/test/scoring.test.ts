@@ -1,3 +1,4 @@
+import { register as registerRateLimiter } from "@convex-dev/rate-limiter/test";
 import { register } from "@convex-dev/workpool/test";
 import { convexTest } from "convex-test";
 import type { TestConvex } from "convex-test";
@@ -40,7 +41,7 @@ const markReady = makeFunctionReference<"mutation", MarkReadyArgs, boolean>(
   "internal/images:markReady",
 );
 
-const score = makeFunctionReference<"action", { imageId: Id<"images"> }, void>(
+const score = makeFunctionReference<"action", { imageId: Id<"images">; run: number }, void>(
   "actions/scoring:score",
 );
 
@@ -48,6 +49,7 @@ const record = makeFunctionReference<
   "mutation",
   {
     imageId: Id<"images">;
+    run: number;
     result: Record<string, unknown>;
     attempts: Record<string, unknown>[];
   },
@@ -56,7 +58,7 @@ const record = makeFunctionReference<
 
 const tryCached = makeFunctionReference<
   "mutation",
-  { imageId: Id<"images">; provider: "stub"; configVersion: string },
+  { imageId: Id<"images">; run: number; provider: "stub"; configVersion: string },
   boolean
 >("internal/scoring:tryCached");
 
@@ -87,6 +89,7 @@ async function insertScoringImage(
       height: 100,
       status,
       scoringStartedAt: status === "scoring" ? Date.now() : undefined,
+      scoringRun: status === "scoring" ? 1 : undefined,
       createdAt: 1_700_000_000_000,
     });
     return { imageId, storageId };
@@ -128,6 +131,7 @@ async function rows(t: Test) {
 
 it("T-SCR-09 markReady enqueues and the scoring action lands a scored row", async () => {
   const t = convexTest(schema, modules);
+  registerRateLimiter(t, "rateLimiter");
   register(t, "scoringPool");
   const { imageId, storageId, previewId, thumbId } =
     await insertProcessingImage(t);
@@ -155,7 +159,7 @@ it("T-SCR-09 markReady enqueues and the scoring action lands a scored row", asyn
   // harness rejects. The dev end-to-end run exercises the real pool; here the
   // enqueue is proven by `markReady` succeeding against the registered
   // component, and the queued action is invoked directly.
-  await t.action(score, { imageId });
+  await t.action(score, { imageId, run: 1 });
 
   const { image, scores, attempts, audits } = await rows(t);
   expect(image).toMatchObject({ status: "scored" });
@@ -197,11 +201,12 @@ it("T-SCR-09 markReady enqueues and the scoring action lands a scored row", asyn
 
 it("T-SCR-09 passes the stored WebP unchanged to a provider that accepts it", async () => {
   const t = convexTest(schema, modules);
+  registerRateLimiter(t, "rateLimiter");
   const { imageId } = await insertScoringImage(t, SUCCESS_SHA);
 
   const spy = vi.spyOn(stubProvider, "score");
   try {
-    await t.action(score, { imageId });
+    await t.action(score, { imageId, run: 1 });
 
     expect(spy).toHaveBeenCalledTimes(1);
     const input = spy.mock.calls[0]?.[0];
@@ -214,9 +219,10 @@ it("T-SCR-09 passes the stored WebP unchanged to a provider that accepts it", as
 
 it("T-SCR-10 a retryable error records two attempts and ends unavailable", async () => {
   const t = convexTest(schema, modules);
+  registerRateLimiter(t, "rateLimiter");
   const { imageId } = await insertScoringImage(t, RETRYABLE_SHA);
 
-  await t.action(score, { imageId });
+  await t.action(score, { imageId, run: 1 });
 
   const { image, scores, attempts, audits } = await rows(t);
   expect(image).toMatchObject({ status: "scored" });
@@ -238,9 +244,10 @@ it("T-SCR-10 a retryable error records two attempts and ends unavailable", async
 
 it("T-SCR-10 a fatal error records one attempt and is not retried", async () => {
   const t = convexTest(schema, modules);
+  registerRateLimiter(t, "rateLimiter");
   const { imageId } = await insertScoringImage(t, FATAL_SHA);
 
-  await t.action(score, { imageId });
+  await t.action(score, { imageId, run: 1 });
 
   const { image, scores, attempts, audits } = await rows(t);
   expect(image).toMatchObject({ status: "scored" });
@@ -255,9 +262,10 @@ it("T-SCR-10 a fatal error records one attempt and is not retried", async () => 
 
 it("T-SCR-10 a call over the timeout aborts and retries once", async () => {
   const t = convexTest(schema, modules);
+  registerRateLimiter(t, "rateLimiter");
   const { imageId } = await insertScoringImage(t, DELAY_SHA);
 
-  await t.action(score, { imageId });
+  await t.action(score, { imageId, run: 1 });
 
   const { scores, attempts } = await rows(t);
   expect(scores[0]).toMatchObject({ status: "unavailable" });
@@ -270,13 +278,14 @@ it("T-SCR-10 a call over the timeout aborts and retries once", async () => {
 
 it("T-SCR-11 a second score run is a no-op", async () => {
   const t = convexTest(schema, modules);
+  registerRateLimiter(t, "rateLimiter");
   const { imageId } = await insertScoringImage(t, SUCCESS_SHA);
 
-  await t.action(score, { imageId });
+  await t.action(score, { imageId, run: 1 });
   const first = await rows(t);
   expect(first.image?.status).toBe("scored");
 
-  await t.action(score, { imageId });
+  await t.action(score, { imageId, run: 1 });
   const second = await rows(t);
   expect(second.scores).toHaveLength(1);
   expect(second.attempts).toHaveLength(1);
@@ -285,11 +294,13 @@ it("T-SCR-11 a second score run is a no-op", async () => {
 
 it("T-SCR-11 record on a row that is not scoring writes nothing", async () => {
   const t = convexTest(schema, modules);
+  registerRateLimiter(t, "rateLimiter");
   const { imageId } = await insertScoringImage(t, SUCCESS_SHA, "scored");
   const before = await rows(t);
 
   const written = await t.mutation(record, {
     imageId,
+    run: 1,
     result: {
       score: 50,
       confidence: 0.9,
@@ -321,14 +332,15 @@ it("T-SCR-11 record on a row that is not scoring writes nothing", async () => {
 
 it("T-SCR-12 a second image with the same sha links the cached score without a provider call", async () => {
   const t = convexTest(schema, modules);
+  registerRateLimiter(t, "rateLimiter");
   const first = await insertScoringImage(t, SUCCESS_SHA, "scoring", "user-1");
   const second = await insertScoringImage(t, SUCCESS_SHA, "scoring", "user-2");
 
   const spy = vi.spyOn(stubProvider, "score");
   try {
-    await t.action(score, { imageId: first.imageId });
+    await t.action(score, { imageId: first.imageId, run: 1 });
     expect(spy).toHaveBeenCalledTimes(1);
-    await t.action(score, { imageId: second.imageId });
+    await t.action(score, { imageId: second.imageId, run: 1 });
     // The cache hit stopped the action before the provider was reached.
     expect(spy).toHaveBeenCalledTimes(1);
   } finally {
@@ -370,13 +382,15 @@ it("T-SCR-12 a second image with the same sha links the cached score without a p
 
 it("T-SCR-12 a config version bump misses the cache", async () => {
   const t = convexTest(schema, modules);
+  registerRateLimiter(t, "rateLimiter");
   const first = await insertScoringImage(t, SUCCESS_SHA, "scoring", "user-1");
   const second = await insertScoringImage(t, SUCCESS_SHA, "scoring", "user-2");
 
-  await t.action(score, { imageId: first.imageId });
+  await t.action(score, { imageId: first.imageId, run: 1 });
 
   const bumped = await t.mutation(tryCached, {
     imageId: second.imageId,
+    run: 1,
     provider: "stub",
     configVersion: "2",
   });
@@ -388,6 +402,7 @@ it("T-SCR-12 a config version bump misses the cache", async () => {
   // The same key with the current version still hits.
   const hit = await t.mutation(tryCached, {
     imageId: second.imageId,
+    run: 1,
     provider: "stub",
     configVersion: "1",
   });
@@ -396,13 +411,14 @@ it("T-SCR-12 a config version bump misses the cache", async () => {
 
 it("T-SCR-12 an unavailable row is never served from the cache", async () => {
   const t = convexTest(schema, modules);
+  registerRateLimiter(t, "rateLimiter");
   const first = await insertScoringImage(t, UNAVAILABLE_SHA, "scoring", "user-1");
   const second = await insertScoringImage(t, UNAVAILABLE_SHA, "scoring", "user-2");
 
   const spy = vi.spyOn(stubProvider, "score");
   try {
-    await t.action(score, { imageId: first.imageId });
-    await t.action(score, { imageId: second.imageId });
+    await t.action(score, { imageId: first.imageId, run: 1 });
+    await t.action(score, { imageId: second.imageId, run: 1 });
     expect(spy).toHaveBeenCalledTimes(2);
   } finally {
     spy.mockRestore();
@@ -428,6 +444,7 @@ it("T-SCR-12 an unavailable row is never served from the cache", async () => {
 
 it("T-SCR-12 concurrent misses link the second record to the first row", async () => {
   const t = convexTest(schema, modules);
+  registerRateLimiter(t, "rateLimiter");
   const first = await insertScoringImage(t, SUCCESS_SHA, "scoring", "user-1");
   const second = await insertScoringImage(t, SUCCESS_SHA, "scoring", "user-2");
 
@@ -450,9 +467,10 @@ it("T-SCR-12 concurrent misses link the second record to the first row", async (
     at: 1,
   };
 
-  await t.mutation(record, { imageId: first.imageId, result, attempts: [attempt] });
+  await t.mutation(record, { imageId: first.imageId, run: 1, result, attempts: [attempt] });
   await t.mutation(record, {
     imageId: second.imageId,
+    run: 1,
     result: { ...result, score: 43 },
     attempts: [attempt],
   });
@@ -478,6 +496,7 @@ it("T-SCR-12 concurrent misses link the second record to the first row", async (
 
 it("T-SCR-12 the cache lookup ignores unbounded outage history under the key", async () => {
   const t = convexTest(schema, modules);
+  registerRateLimiter(t, "rateLimiter");
   const image = await insertScoringImage(t, SUCCESS_SHA, "scoring", "user-2");
 
   const cacheableId = await t.run(async (ctx) => {
@@ -517,6 +536,7 @@ it("T-SCR-12 the cache lookup ignores unbounded outage history under the key", a
 
   const hit = await t.mutation(tryCached, {
     imageId: image.imageId,
+    run: 1,
     provider: "stub",
     configVersion: "1",
   });
@@ -530,6 +550,7 @@ it("T-SCR-12 the cache lookup ignores unbounded outage history under the key", a
 
 it("T-SCR-12 a concurrent link audits the linked row's status", async () => {
   const t = convexTest(schema, modules);
+  registerRateLimiter(t, "rateLimiter");
   const first = await insertScoringImage(t, SUCCESS_SHA, "scoring", "user-1");
   const second = await insertScoringImage(t, SUCCESS_SHA, "scoring", "user-2");
 
@@ -554,6 +575,7 @@ it("T-SCR-12 a concurrent link audits the linked row's status", async () => {
 
   await t.mutation(record, {
     imageId: first.imageId,
+    run: 1,
     result,
     attempts: [attempt],
   });
@@ -561,6 +583,7 @@ it("T-SCR-12 a concurrent link audits the linked row's status", async () => {
   // existing `scored` row, and the audit must say so.
   await t.mutation(record, {
     imageId: second.imageId,
+    run: 1,
     result: { ...result, status: "multiple_faces", reason: "Scored 2 faces" },
     attempts: [attempt],
   });
@@ -581,4 +604,26 @@ it("T-SCR-12 a concurrent link audits the linked row's status", async () => {
       cached: true,
     },
   });
+});
+
+it("T-SCR-14 a job from an older scoring run changes nothing", async () => {
+  const t = convexTest(schema, modules);
+  registerRateLimiter(t, "rateLimiter");
+  const { imageId } = await insertScoringImage(t, SUCCESS_SHA);
+  // Simulate a rescore bumping the row to run 2 while the run-1 job is queued.
+  await t.run(async (ctx) => ctx.db.patch("images", imageId, { scoringRun: 2 }));
+
+  await t.action(score, { imageId, run: 1 });
+
+  const afterStale = await rows(t);
+  expect(afterStale.image).toMatchObject({ status: "scoring", scoringRun: 2 });
+  expect(afterStale.scores).toHaveLength(0);
+  expect(afterStale.attempts).toHaveLength(0);
+  expect(afterStale.audits).toHaveLength(0);
+
+  await t.action(score, { imageId, run: 2 });
+  const afterCurrent = await rows(t);
+  expect(afterCurrent.image).toMatchObject({ status: "scored" });
+  expect(afterCurrent.scores).toHaveLength(1);
+  expect(afterCurrent.attempts).toHaveLength(1);
 });

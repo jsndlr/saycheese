@@ -45,3 +45,9 @@ describe("authErrorMessage", () => {
     expect(authErrorMessage("NOPE")).toBe(ERROR_MESSAGES.INTERNAL);
   });
 });
+describe("T-SEC-05 mapAuthErrorCode: sign-in rate limit", () => {
+  it("maps the Convex limiter's 429 code to RATE_LIMITED copy", () => {
+    expect(mapAuthErrorCode("TOO_MANY_REQUESTS")).toBe("RATE_LIMITED");
+    expect(authErrorMessage("TOO_MANY_REQUESTS")).toBe(ERROR_MESSAGES.RATE_LIMITED);
+  });
+});

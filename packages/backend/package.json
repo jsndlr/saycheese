@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@convex-dev/better-auth": "catalog:",
+    "@convex-dev/rate-limiter": "^0.4.2",
     "@convex-dev/workpool": "^0.4.15",
     "@saycheese/core": "workspace:*",
     "aws4fetch": "^1.0.20",

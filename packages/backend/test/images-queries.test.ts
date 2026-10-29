@@ -367,6 +367,7 @@ it("never leaks storage ids, ownership or provider internals in DTOs", async () 
     "height",
     "id",
     "mime",
+    "quotaExceeded",
     "score",
     "sha256",
     "status",

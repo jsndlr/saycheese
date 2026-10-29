@@ -12,6 +12,8 @@ const AUTH_ERROR_CODES: Readonly<Record<string, ErrorCode>> = {
   INVALID_PASSWORD: "INVALID_CREDENTIALS",
   PASSWORD_TOO_SHORT: "VALIDATION_FAILED",
   PASSWORD_TOO_LONG: "VALIDATION_FAILED",
+  // Convex-side sign-in limiter (convex/auth.ts) answers 429 with this code.
+  TOO_MANY_REQUESTS: "RATE_LIMITED",
 };
 
 export function mapAuthErrorCode(code: string | null | undefined): ErrorCode {

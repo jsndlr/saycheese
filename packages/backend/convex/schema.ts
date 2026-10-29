@@ -35,11 +35,19 @@ export default defineSchema({
     // Set when `markReady` hands the row to the scoring pool; the stuck sweep
     // compares it against `SCORING_TIMEOUT_MS`. Missing values are ignored.
     scoringStartedAt: v.optional(v.number()),
+    // Monotonic run id. Every transition into `scoring` increments it and the
+    // enqueued job carries it, so a job from an older run can never settle a
+    // newer one (for example after a rescore).
+    scoringRun: v.optional(v.number()),
     failureCode: v.optional(errorCode),
     scoreId: v.optional(v.id("scores")),
     // True when `scoreId` was linked from the content cache instead of a
     // provider run. Per image, never per score: the score row is shared.
     scoreCached: v.optional(v.boolean()),
+    // True when the image settled with an `unavailable` score because the
+    // caller's daily provider budget was exhausted, not because a provider
+    // failed. The score row's reason is the SCORING_QUOTA copy; variants stay.
+    quotaExceeded: v.optional(v.boolean()),
     createdAt: v.number(),
     archivedAt: v.optional(v.number()),
   })

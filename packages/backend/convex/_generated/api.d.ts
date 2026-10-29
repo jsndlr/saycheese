@@ -18,6 +18,7 @@ import type * as env from "../env.js";
 import type * as functions from "../functions.js";
 import type * as healthCheck from "../healthCheck.js";
 import type * as http from "../http.js";
+import type * as internal_authRateLimit from "../internal/authRateLimit.js";
 import type * as internal_images from "../internal/images.js";
 import type * as internal_scoring from "../internal/scoring.js";
 import type * as internal_seed from "../internal/seed.js";
@@ -33,6 +34,7 @@ import type * as lib_providers_rekognition from "../lib/providers/rekognition.js
 import type * as lib_providers_stub from "../lib/providers/stub.js";
 import type * as lib_providers_types from "../lib/providers/types.js";
 import type * as lib_providers_vision from "../lib/providers/vision.js";
+import type * as lib_rateLimits from "../lib/rateLimits.js";
 import type * as lib_scoringPolicy from "../lib/scoringPolicy.js";
 import type * as lib_scoringPool from "../lib/scoringPool.js";
 import type * as lib_seedGuard from "../lib/seedGuard.js";
@@ -60,6 +62,7 @@ declare const fullApi: ApiFromModules<{
   functions: typeof functions;
   healthCheck: typeof healthCheck;
   http: typeof http;
+  "internal/authRateLimit": typeof internal_authRateLimit;
   "internal/images": typeof internal_images;
   "internal/scoring": typeof internal_scoring;
   "internal/seed": typeof internal_seed;
@@ -75,6 +78,7 @@ declare const fullApi: ApiFromModules<{
   "lib/providers/stub": typeof lib_providers_stub;
   "lib/providers/types": typeof lib_providers_types;
   "lib/providers/vision": typeof lib_providers_vision;
+  "lib/rateLimits": typeof lib_rateLimits;
   "lib/scoringPolicy": typeof lib_scoringPolicy;
   "lib/scoringPool": typeof lib_scoringPool;
   "lib/seedGuard": typeof lib_seedGuard;
@@ -114,5 +118,6 @@ export declare const internal: FilterApi<
 
 export declare const components: {
   betterAuth: import("@convex-dev/better-auth/_generated/component.js").ComponentApi<"betterAuth">;
+  rateLimiter: import("@convex-dev/rate-limiter/_generated/component.js").ComponentApi<"rateLimiter">;
   scoringPool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"scoringPool">;
 };

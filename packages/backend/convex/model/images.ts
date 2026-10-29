@@ -32,6 +32,7 @@ export type ImageDto = {
   height: number | null;
   status: Doc<"images">["status"];
   failureCode: NonNullable<Doc<"images">["failureCode"]> | null;
+  quotaExceeded: boolean;
   createdAt: number;
   score: ImageScoreDto | null;
 };
@@ -77,6 +78,7 @@ export async function toImageDto(
     height: image.height ?? null,
     status: image.status,
     failureCode: image.failureCode ?? null,
+    quotaExceeded: image.quotaExceeded ?? false,
     createdAt: image.createdAt,
     score:
       score === null

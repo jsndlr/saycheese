@@ -61,12 +61,14 @@ export const markReady = internalMutation({
     }
 
     const rawStorageId = image.rawStorageId;
+    const run = (image.scoringRun ?? 0) + 1;
     await ctx.db.patch("images", args.imageId, {
       // Straight to `scoring`: the variants exist, so the row now belongs to
       // the scoring pool. `ready` remains a valid (legacy/test) state but no
       // production transition produces it any more.
       status: "scoring",
       scoringStartedAt: Date.now(),
+      scoringRun: run,
       storageId: args.storageId,
       previewId: args.previewId,
       thumbId: args.thumbId,
@@ -82,12 +84,13 @@ export const markReady = internalMutation({
     }
 
     // Same transaction as the patch: the row can never be `scoring` without a
-    // queued job (or a timestamp the stuck sweep can act on). Retries are
-    // owned by the action, so the component's retry is explicitly off.
+    // queued job (or a timestamp the stuck sweep can act on). The job carries
+    // `run`, so a duplicate or stale run is a no-op. Retries are owned by the
+    // action, so the component's retry is explicitly off.
     await scoringPool.enqueueAction(
       ctx,
       internal.actions.scoring.score,
-      { imageId: args.imageId },
+      { imageId: args.imageId, run },
       { retry: false },
     );
     return true;

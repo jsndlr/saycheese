@@ -10,7 +10,12 @@ import { z } from "zod";
 
 import { internal } from "../_generated/api";
 import { authedMutation, fail } from "../functions";
+import { isProviderOutage } from "../internal/scoring";
+import { consume } from "../lib/rateLimits";
+import { scoringPool } from "../lib/scoringPool";
 import { isStorageIdReferenced } from "../lib/storage";
+import type { ImageDto } from "../model/images";
+import { ownedImage, toImageDto } from "../model/images";
 
 const base64Alphabet =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -53,7 +58,10 @@ export const createUpload = authedMutation({
   args: {},
   permission: { resource: "image", action: "create" },
   handler: async (ctx) => {
-    // Rate limit: Phase 3
+    // Minting a URL is cheap and creates nothing, so it has its own, looser
+    // limit. The real cap is `commitUpload`, because one URL can be reused
+    // until it expires.
+    await consume(ctx, "uploadUrl", ctx.user.id);
     const uploadUrl = await ctx.storage.generateUploadUrl();
     return { uploadUrl, expiresAt: Date.now() + UPLOAD_URL_TTL_MS };
   },
@@ -130,6 +138,12 @@ export const commitUpload = authedMutation({
       return { id: previous._id, deduplicated: true };
     }
 
+    // One token per committed upload. Consumed only after the cheap checks and
+    // the dedupe lookup: a dedupe hit creates nothing and must not spend the
+    // allowance. A rate-limited commit throws, so the storage delete above and
+    // this insert roll back; the uploaded object is left for the orphan sweep.
+    await consume(ctx, "upload", ctx.user.id);
+
     const imageId = await ctx.db.insert("images", {
       userId: ctx.user.id,
       sha256: serverSha256,
@@ -152,5 +166,88 @@ export const commitUpload = authedMutation({
     await ctx.scheduler.runAfter(0, internal.actions.images.process, { imageId });
 
     return { id: imageId, deduplicated: false };
+  },
+});
+/**
+ * Plan 6.3 rescore. Allowed for a `scored` image whose current score is
+ * `unavailable` (provider outage or daily quota) and for any `scored` image
+ * with `force`. A real score without `force` is a no-op: the command is
+ * idempotent and returns the current state without consuming a token.
+ *
+ * Failed/archived/uploading (and any other non-`scored`) image → validation
+ * error: there is nothing to rescore, and silently re-running processing would
+ * be a different operation.
+ *
+ * An unavailable score from a provider outage inside
+ * `SCORING_OUTAGE_WINDOW_MS` is refused with SCORING_UNAVAILABLE instead of
+ * re-hammering providers. That check runs **before** the limiter: the
+ * rejection performs no provider work, so it costs nothing and must not spend
+ * the user's allowance. The rescore limit protects provider calls, and only a
+ * request that will actually enqueue one consumes a token.
+ *
+ * A quota-settled row is not an outage and may be retried; it will simply hit
+ * the quota again until the daily window rolls over.
+ */
+export const rescore = authedMutation({
+  args: { id: zid("images"), force: z.boolean().default(false) },
+  permission: { resource: "image", action: "rescore" },
+  handler: async (ctx, args): Promise<ImageDto> => {
+    const image = await ownedImage(ctx, args.id, { includeArchived: true });
+    if (image.archivedAt !== undefined || image.status !== "scored") {
+      return fail("VALIDATION_FAILED");
+    }
+
+    const score =
+      image.scoreId === undefined ? null : await ctx.db.get("scores", image.scoreId);
+    const hasRealScore =
+      score !== null && score.status !== "unavailable";
+    if (hasRealScore && !args.force) {
+      // Idempotent no-op, before the limiter: repeating the same call must not
+      // burn the caller's rescore budget.
+      return await toImageDto(ctx, image);
+    }
+
+    if (!args.force && (await isProviderOutage(ctx, image, Date.now()))) {
+      // Before `consume`: an outage rejection does no provider work, so it must
+      // not spend a token (and a throw would roll any consumption back anyway).
+      return fail("SCORING_UNAVAILABLE");
+    }
+
+    await consume(ctx, "rescore", ctx.user.id);
+
+    const now = Date.now();
+    const run = (image.scoringRun ?? 0) + 1;
+    await ctx.db.patch("images", args.id, {
+      status: "scoring",
+      scoreId: undefined,
+      scoreCached: undefined,
+      quotaExceeded: undefined,
+      failureCode: undefined,
+      scoringStartedAt: now,
+      scoringRun: run,
+    });
+    await ctx.db.insert("auditEvents", {
+      actorId: ctx.user.id,
+      action: "image.rescore",
+      table: "images",
+      docId: args.id,
+      before: {
+        status: image.status,
+        scoreId: image.scoreId ?? null,
+        scoreStatus: score?.status ?? null,
+        force: args.force,
+      },
+      after: { status: "scoring" },
+      at: now,
+    });
+    await scoringPool.enqueueAction(
+      ctx,
+      internal.actions.scoring.score,
+      { imageId: args.id, run, force: args.force },
+      { retry: false },
+    );
+
+    const updated = await ctx.db.get("images", args.id);
+    return await toImageDto(ctx, updated ?? image);
   },
 });

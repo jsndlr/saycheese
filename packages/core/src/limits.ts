@@ -56,10 +56,16 @@ export type VariantName = (typeof VARIANTS)[number]["name"];
 
 export const WEBP_QUALITY = 82;
 
+const HOURLY_WINDOW_MS = 60 * 60_000;
+
 export const RATE_LIMITS = {
   signIn: { limit: 10, windowMs: 15 * 60_000 },
-  upload: { limit: 30, windowMs: 60 * 60_000 },
-  rescore: { limit: 10, windowMs: 60 * 60_000 },
+  // Committed uploads, not minted URLs: one URL can be reused until it expires.
+  upload: { limit: 30, windowMs: HOURLY_WINDOW_MS },
+  // Twice the commit allowance: minting is cheap and a client may legitimately
+  // request several URLs before committing any of them.
+  uploadUrl: { limit: 60, windowMs: HOURLY_WINDOW_MS },
+  rescore: { limit: 10, windowMs: HOURLY_WINDOW_MS },
   score: { limit: 100, windowMs: 24 * 60 * 60_000 },
 } as const;
 
@@ -83,6 +89,15 @@ export const PROCESSING_TIMEOUT_MS = 15 * 60 * 1000;
  * before the hourly maintenance cadence becomes noticeable.
  */
 export const SCORING_TIMEOUT_MS = 5 * 60 * 1000;
+
+/**
+ * A rescore is refused with `SCORING_UNAVAILABLE` while the image's last score
+ * was `unavailable` and every configured provider failed within this window.
+ * Plan 6.3: five minutes is longer than one scoring run (10 s) and long enough
+ * to stop a user hammering a provider outage, while still allowing a retry
+ * after the next provider-side recovery window.
+ */
+export const SCORING_OUTAGE_WINDOW_MS = 5 * 60 * 1000;
 
 export function exceedsByteCap(bytes: number): boolean {
   return bytes > MAX_UPLOAD_BYTES;

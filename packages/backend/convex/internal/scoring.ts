@@ -1,10 +1,15 @@
 import type { ProviderName } from "../lib/providers/types";
+import { ERROR_MESSAGES } from "@saycheese/core/errors";
+import { SCORING_OUTAGE_WINDOW_MS } from "@saycheese/core/limits";
 import { UNAVAILABLE_REASON, type ScoreStatus } from "@saycheese/core/scoring";
 import { v } from "convex/values";
 
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { internalMutation, internalQuery } from "../_generated/server";
+import { env } from "../env";
+import { providerOrder } from "../lib/providers";
+import { consumeDailyScore } from "../lib/rateLimits";
 import { provider, scoreStatus, scoringOutcome } from "../validators";
 
 /**
@@ -106,12 +111,13 @@ export async function cachedScore(
 export const tryCached = internalMutation({
   args: {
     imageId: v.id("images"),
+    run: v.number(),
     provider,
     configVersion: v.string(),
   },
-  handler: async (ctx, { imageId, provider: providerName, configVersion }) => {
+  handler: async (ctx, { imageId, run, provider: providerName, configVersion }) => {
     const image = await ctx.db.get("images", imageId);
-    if (image === null || image.status !== "scoring") {
+    if (image === null || image.status !== "scoring" || image.scoringRun !== run) {
       return false;
     }
 
@@ -130,6 +136,7 @@ export const tryCached = internalMutation({
       scoreId: cached._id,
       scoreCached: true,
       scoringStartedAt: undefined,
+      quotaExceeded: undefined,
     });
     await ctx.db.insert("auditEvents", {
       actorId: "system:scoring",
@@ -156,10 +163,15 @@ export const tryCached = internalMutation({
  * a no-op — a duplicate workpool run cannot score twice.
  */
 export const load = internalQuery({
-  args: { imageId: v.id("images") },
-  handler: async (ctx, { imageId }) => {
+  args: { imageId: v.id("images"), run: v.number() },
+  handler: async (ctx, { imageId, run }) => {
     const image = await ctx.db.get("images", imageId);
-    if (image === null || image.status !== "scoring" || image.storageId === undefined) {
+    if (
+      image === null ||
+      image.status !== "scoring" ||
+      image.scoringRun !== run ||
+      image.storageId === undefined
+    ) {
       return null;
     }
     return {
@@ -185,12 +197,16 @@ export const load = internalQuery({
 export const record = internalMutation({
   args: {
     imageId: v.id("images"),
+    run: v.number(),
     result: scoreResult,
     attempts: v.array(scoringAttempt),
+    // Explicit rescore: the previous cacheable row for this key stops being
+    // the cache answer and this run's row becomes it.
+    force: v.optional(v.boolean()),
   },
-  handler: async (ctx, { imageId, result, attempts }) => {
+  handler: async (ctx, { imageId, run, result, attempts, force }) => {
     const image = await ctx.db.get("images", imageId);
-    if (image === null || image.status !== "scoring") {
+    if (image === null || image.status !== "scoring" || image.scoringRun !== run) {
       return false;
     }
 
@@ -199,13 +215,20 @@ export const record = internalMutation({
     // provider, and arrive here. The first inserts the cacheable row; the
     // second links to it instead of creating a second cache entry for the same
     // key. `unavailable` is never cached, so each outage keeps its own row.
-    const cached = isCacheableStatus(result.status)
+    let cached = isCacheableStatus(result.status)
       ? await cachedScore(ctx.db, {
           sha256: image.sha256,
           provider: result.provider,
           configVersion: result.configVersion,
         })
       : null;
+    if (force === true && cached !== null) {
+      // Demote the old answer instead of overwriting it: other images still
+      // link to that row and must keep reading the score they were given. Only
+      // future cache lookups move to the fresh row.
+      await ctx.db.patch("scores", cached._id, { cacheable: false });
+      cached = null;
+    }
     const linked = cached !== null;
     const scoreId =
       cached?._id ??
@@ -241,6 +264,7 @@ export const record = internalMutation({
       scoreId,
       scoreCached: linked,
       scoringStartedAt: undefined,
+      quotaExceeded: undefined,
     });
 
     await ctx.db.insert("auditEvents", {
@@ -253,7 +277,8 @@ export const record = internalMutation({
         status: "scored",
         scoreId,
         // On a concurrent-miss link, describe what the image actually got:
-        // the existing row, not this run's discarded result.
+        // the existing row, not this run's discarded result. A forced run
+        // always describes its own result.
         scoreStatus: cached?.status ?? result.status,
         cached: linked,
       },
@@ -344,4 +369,125 @@ export async function recordUnavailable(
     at: options.at,
   });
   return true;
+}
+/**
+ * Consumes one unit of the caller's daily provider budget, immediately before
+ * the action's first provider call (never on a cache hit: a cache hit is free).
+ * A row that is no longer `scoring` gets no budget and no score.
+ */
+export const claimDailyScore = internalMutation({
+  args: { imageId: v.id("images"), run: v.number() },
+  handler: async (ctx, { imageId, run }) => {
+    const image = await ctx.db.get("images", imageId);
+    if (image === null || image.status !== "scoring" || image.scoringRun !== run) {
+      return { ok: false as const, skipped: true as const, retryAfterMs: 0 };
+    }
+    const budget = await consumeDailyScore(ctx, image.userId);
+    return budget.ok
+      ? { ok: true as const, skipped: false as const }
+      : { ok: false as const, skipped: false as const, retryAfterMs: budget.retryAfterMs };
+  },
+});
+
+/**
+ * Terminal state for a quota-exceeded image. Plan 6.3 decision: the image is
+ * `scored` with an `unavailable` score whose reason is the SCORING_QUOTA copy,
+ * plus `quotaExceeded: true`; variants are kept. It is not `failed` because the
+ * image itself is fine (`failImage` would delete the variants and the UI would
+ * lose the picture). `unavailable` is not cacheable, so this row never shadows
+ * a real score for the same content. `quotaExceeded` tells the UI to show the
+ * quota state and the rescore command to retry it tomorrow.
+ */
+export const recordQuotaExceeded = internalMutation({
+  args: {
+    imageId: v.id("images"),
+    run: v.number(),
+    provider,
+    providerModel: v.string(),
+    configVersion: v.string(),
+  },
+  handler: async (ctx, { imageId, run, provider: providerName, providerModel, configVersion }) => {
+    const image = await ctx.db.get("images", imageId);
+    if (image === null || image.status !== "scoring" || image.scoringRun !== run) {
+      return false;
+    }
+
+    const now = Date.now();
+    const scoreId = await ctx.db.insert("scores", {
+      sha256: image.sha256,
+      score: null,
+      confidence: null,
+      faceCount: 0,
+      status: "unavailable",
+      reason: ERROR_MESSAGES.SCORING_QUOTA,
+      provider: providerName,
+      providerModel,
+      configVersion,
+      latencyMs: 0,
+      costMicros: 0,
+      cacheable: false,
+      createdAt: now,
+    });
+    await ctx.db.patch("images", imageId, {
+      status: "scored",
+      scoreId,
+      scoreCached: false,
+      quotaExceeded: true,
+      scoringStartedAt: undefined,
+    });
+    await ctx.db.insert("auditEvents", {
+      actorId: "system:scoring",
+      action: "score.fail",
+      table: "images",
+      docId: imageId,
+      before: { status: "scoring" },
+      after: { status: "scored", scoreId, scoreStatus: "unavailable", quotaExceeded: true },
+      at: now,
+    });
+    return true;
+  },
+});
+
+/**
+ * True when the image's most recent unavailable score came from a provider
+ * outage inside `SCORING_OUTAGE_WINDOW_MS`: every configured provider failed
+ * and nothing succeeded in the window. A quota-settled row is deliberately not
+ * an outage (its reason is the SCORING_QUOTA copy): rescoring it is allowed and
+ * simply hits the quota again until the window rolls over.
+ */
+export async function isProviderOutage(
+  ctx: Pick<MutationCtx, "db">,
+  image: { _id: Id<"images">; scoreId?: Id<"scores"> },
+  now: number,
+): Promise<boolean> {
+  if (image.scoreId === undefined) {
+    return false;
+  }
+  const score = await ctx.db.get("scores", image.scoreId);
+  if (
+    score === null ||
+    score.status !== "unavailable" ||
+    score.reason !== UNAVAILABLE_REASON ||
+    now - score.createdAt > SCORING_OUTAGE_WINDOW_MS
+  ) {
+    return false;
+  }
+
+  const attempts = await ctx.db
+    .query("scoringAttempts")
+    .withIndex("by_image_at", (q) =>
+      q.eq("imageId", image._id).gte("at", now - SCORING_OUTAGE_WINDOW_MS),
+    )
+    .collect();
+  if (attempts.some((attempt) => attempt.outcome === "success")) {
+    return false;
+  }
+  const failedProviders = new Set(
+    attempts
+      .filter((attempt) => attempt.outcome !== "success")
+      .map((attempt) => attempt.provider),
+  );
+  // "Both providers" for multi-provider deployments; a single-provider
+  // deployment cannot reach two, so one failed provider is the whole outage.
+  return failedProviders.size >= Math.min(2, providerOrder(env).length);
 }
