@@ -55,6 +55,17 @@ export const IMAGE_DETAIL_COPY = {
   unknownValue: "Not available",
   notFoundHeading: "Photo not found",
   notFound: "This photo is not available.",
+  archive: "Archive photo",
+  archiveQuestion: "Archive this photo? It disappears from your history.",
+  archivePending: "Archiving…",
+  archiveBlocked: "Wait until scoring finishes",
+  archivedToast: "Photo archived",
+} as const;
+
+/** Shared labels for the inline confirm step; both flows must read the same. */
+export const CONFIRM_COPY = {
+  confirm: "Confirm",
+  cancel: "Cancel",
 } as const;
 
 export const SCORE_COPY = {
@@ -79,6 +90,9 @@ export const SCORE_COPY = {
   quotaResetPrefix: "Your daily limit resets on",
   quotaResetPassed: "Your daily limit has reset. Rescore this photo.",
   rescore: "Try scoring again",
+  scoreAgain: "Score again",
+  scoreAgainQuestion:
+    "Score this photo again? This uses one rescore from your hourly limit.",
   changeFile: "Choose another photo",
   noScore: "No score is available for this photo.",
   previewAlt: "Your uploaded photo",

@@ -52,6 +52,12 @@ This decision would change with a custom libvips build that includes libde265 (o
 | Client-claimed byte count or SHA-256 disagrees with storage | Commit | `VALIDATION_FAILED` |
 | Uploaded row never processed within 15 minutes | Stuck-image sweep | `IMAGE_TIMEOUT` |
 
+## Archiving
+
+Archiving hides a photo instead of deleting it. `commands.images.archive` sets `archivedAt` and writes one `image.archive` audit row (with the before/after status and `archivedAt`) in the same mutation. Every list and detail query filters on the live index, so an archived row reads as `NOT_FOUND` through `byId` and `fileUrl` and disappears from `list`. A second archive therefore answers `NOT_FOUND`; the operation is idempotent in effect, not in response. The command is refused with `VALIDATION_FAILED` while `uploaded`, `processing` or `scoring`: a scheduled action still holds the row and will write it. No rate limit applies (one owner-scoped field write, no provider work).
+
+The storage objects survive for `ARCHIVE_RETENTION_MS` (30 days), so a mistaken archive stays recoverable inside that window. `internal/archiveSweep` then deletes the original, preview, thumb and raw objects, unsets those fields and sets `purgedAt`, keeping the row so the audit trail and score link stay resolvable. Rows are read through `images.by_unpurged_archived` with an equality on the missing `purgedAt`, so a purged row leaves the index range and is never reprocessed; a full batch reschedules, a partial one ends the chain. Linked `scores` rows are shared by content hash and are never touched.
+
 ## Getting Started
 
 First, install the dependencies:

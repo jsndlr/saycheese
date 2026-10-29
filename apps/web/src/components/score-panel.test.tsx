@@ -345,6 +345,129 @@ describe("ScorePanel", () => {
     expect(buttonOf().disabled).toBe(false);
   });
 
+  it("asks for confirmation before a forced rescore", async () => {
+    rescore.mockResolvedValue(image());
+    renderPanel(image());
+
+    fireEvent.click(screen.getByRole("button", { name: "Score again" }));
+    expect(
+      screen.getByText(
+        "Score this photo again? This uses one rescore from your hourly limit.",
+      ),
+    ).toBeTruthy();
+    expect(rescore).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    await act(async () => {});
+
+    expect(rescore).toHaveBeenCalledOnce();
+    expect(rescore).toHaveBeenCalledWith({ id: "image-1", force: true });
+  });
+
+  it("cancels a forced rescore without calling the mutation", () => {
+    renderPanel(image());
+
+    fireEvent.click(screen.getByRole("button", { name: "Score again" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(rescore).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Confirm" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Score again" })).toBeTruthy();
+  });
+
+  it("disables the forced rescore while it is pending", async () => {
+    const pending = Promise.withResolvers<ImageDto>();
+    rescore.mockReturnValue(pending.promise);
+    renderPanel(image());
+
+    fireEvent.click(screen.getByRole("button", { name: "Score again" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    await act(async () => {});
+
+    expect(
+      (screen.getByRole("button", { name: "Score again" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    expect(rescore).toHaveBeenCalledOnce();
+
+    await act(async () => {
+      pending.resolve(image());
+    });
+    expect(
+      (screen.getByRole("button", { name: "Score again" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false);
+  });
+
+  it("counts down a rate-limited forced rescore", async () => {
+    vi.useFakeTimers({ now: Date.now() });
+    rescore.mockRejectedValue(
+      new ConvexError({
+        code: "RATE_LIMITED",
+        message: "slow down",
+        detail: { retryAfterMs: 60_000 },
+      }),
+    );
+    renderPanel(image());
+
+    fireEvent.click(screen.getByRole("button", { name: "Score again" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    await act(async () => {});
+
+    expect(screen.getByRole("alert").textContent).toContain(
+      ERROR_MESSAGES.RATE_LIMITED,
+    );
+    expect(screen.getByText("Try again in 1 minute")).toBeTruthy();
+    expect(
+      (screen.getByRole("button", { name: "Score again" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+
+    for (let i = 0; i < 60; i += 1) {
+      await act(async () => {
+        vi.advanceTimersByTime(1_000);
+      });
+    }
+    expect(
+      (screen.getByRole("button", { name: "Score again" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false);
+  });
+
+  it("shows the outage copy when a forced rescore is refused", async () => {
+    rescore.mockRejectedValue(
+      new ConvexError({ code: "SCORING_UNAVAILABLE", message: "down" }),
+    );
+    renderPanel(image());
+
+    fireEvent.click(screen.getByRole("button", { name: "Score again" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    await act(async () => {});
+
+    expect(screen.getByRole("alert").textContent).toContain(
+      ERROR_MESSAGES.SCORING_UNAVAILABLE,
+    );
+  });
+
+  it("offers a forced rescore for no_face and low_quality results", () => {
+    const { unmount } = renderPanel(
+      image({ score: score({ status: "no_face", score: null }) }),
+    );
+    expect(screen.getByRole("button", { name: "Score again" })).toBeTruthy();
+    unmount();
+
+    renderPanel(
+      image({
+        score: score({
+          status: "low_quality",
+          score: null,
+          reason: "Photo quality is too low to score",
+        }),
+      }),
+    );
+    expect(screen.getByRole("button", { name: "Score again" })).toBeTruthy();
+  });
+
   it("renders the failure code message and a change-file action", () => {
     const { onChangeFile } = renderPanel(
       image({ status: "failed", failureCode: "IMAGE_CORRUPT", score: null }),

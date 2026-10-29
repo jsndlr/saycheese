@@ -99,6 +99,13 @@ export const SCORING_TIMEOUT_MS = 5 * 60 * 1000;
  */
 export const SCORING_OUTAGE_WINDOW_MS = 5 * 60 * 1000;
 
+/**
+ * How long an archived image keeps its storage objects. Archiving only hides
+ * the row; the retention sweep deletes the bytes after this window, so a
+ * mistaken archive is recoverable by support without re-uploading.
+ */
+export const ARCHIVE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
 export function exceedsByteCap(bytes: number): boolean {
   return bytes > MAX_UPLOAD_BYTES;
 }

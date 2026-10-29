@@ -49,7 +49,11 @@ export default defineSchema({
     // failed. The score row's reason is the SCORING_QUOTA copy; variants stay.
     quotaExceeded: v.optional(v.boolean()),
     createdAt: v.number(),
+    // Set by `commands.images.archive`; hides the row from every query.
     archivedAt: v.optional(v.number()),
+    // Set by `internal/archiveSweep` once the storage objects are deleted.
+    // The row itself stays so its audit history remains resolvable.
+    purgedAt: v.optional(v.number()),
   })
     .index("by_user_created", ["userId", "createdAt"])
     .index("by_user_live_created", ["userId", "archivedAt", "createdAt"])
@@ -61,7 +65,12 @@ export default defineSchema({
     .index("by_hash", ["sha256"])
     .index("by_status_started", ["status", "processingStartedAt"])
     .index("by_status_scoring_started", ["status", "scoringStartedAt"])
-    .index("by_status_created", ["status", "createdAt"]),
+    .index("by_status_created", ["status", "createdAt"])
+    // Retention sweep: archived rows whose objects are still stored, in
+    // archive order. `purgedAt` leads so the sweep's equality on it excludes
+    // purged rows structurally; live rows have no `archivedAt` and sort before
+    // every number, so the range `.gt("archivedAt", 0)` skips them.
+    .index("by_unpurged_archived", ["purgedAt", "archivedAt"]),
 
   scores: defineTable({
     sha256: v.string(),

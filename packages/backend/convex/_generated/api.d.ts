@@ -18,6 +18,7 @@ import type * as env from "../env.js";
 import type * as functions from "../functions.js";
 import type * as healthCheck from "../healthCheck.js";
 import type * as http from "../http.js";
+import type * as internal_archiveSweep from "../internal/archiveSweep.js";
 import type * as internal_authRateLimit from "../internal/authRateLimit.js";
 import type * as internal_images from "../internal/images.js";
 import type * as internal_scoring from "../internal/scoring.js";
@@ -62,6 +63,7 @@ declare const fullApi: ApiFromModules<{
   functions: typeof functions;
   healthCheck: typeof healthCheck;
   http: typeof http;
+  "internal/archiveSweep": typeof internal_archiveSweep;
   "internal/authRateLimit": typeof internal_authRateLimit;
   "internal/images": typeof internal_images;
   "internal/scoring": typeof internal_scoring;

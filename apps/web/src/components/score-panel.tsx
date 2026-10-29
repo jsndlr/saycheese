@@ -10,6 +10,7 @@ import { Loader2 } from "@saycheese/ui/lib/icons";
 import { useMutation } from "convex/react";
 import { useEffect, useRef, useState } from "react";
 
+import { ConfirmButton } from "@/components/confirm-button";
 import { LocalTime } from "@/components/local-time";
 import { SCORE_COPY } from "@/lib/copy";
 import { formatLocalTime } from "@/lib/relative-time";
@@ -272,6 +273,69 @@ function Unavailable({
   );
 }
 
+/**
+ * Forced rescore of a real result. Unlike the unavailable path this always
+ * spends a rescore token, so it sits behind a confirmation step; the shared
+ * `RATE_LIMITED` countdown keeps the button disabled until the window refills.
+ */
+function ScoreAgain({ image }: { image: ImageDto }) {
+  const rescore = useMutation(api.commands.images.rescore);
+  const countdown = useWaitCountdown();
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<UiError | null>(null);
+
+  const disabled = pending || countdown.waiting;
+
+  async function run() {
+    if (disabled) {
+      return;
+    }
+    setPending(true);
+    setError(null);
+    countdown.clear();
+
+    try {
+      await rescore({ id: image.id, force: true });
+    } catch (cause) {
+      const ui = toUiError(cause);
+      setError(ui);
+      if (ui.action === "wait") {
+        countdown.start(ui.retryAfterMs ?? 0);
+      }
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <ConfirmButton
+        label={SCORE_COPY.scoreAgain}
+        question={SCORE_COPY.scoreAgainQuestion}
+        variant="outline"
+        size="xs"
+        disabled={countdown.waiting}
+        pending={pending}
+        onConfirm={() => void run()}
+      />
+      {error !== null ? (
+        <div role="alert" className="space-y-1">
+          <p className="text-sm">{error.message}</p>
+          {error.action === "wait" && countdown.waiting ? (
+            <p
+              role="status"
+              aria-live="polite"
+              className="text-xs text-muted-foreground"
+            >
+              {formatRetryAfter(countdown.remainingMs)}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function ScoreResult({
   image,
   score,
@@ -284,30 +348,48 @@ function ScoreResult({
   switch (score.status) {
     case "scored":
       return (
-        <div className="space-y-2">
-          {score.score === null ? (
-            <p className="text-sm">{SCORE_COPY.noScore}</p>
-          ) : (
-            <BigScore score={score.score} />
-          )}
-          <ScoreMeta score={score} />
+        <div className="space-y-3">
+          <div className="space-y-2">
+            {score.score === null ? (
+              <p className="text-sm">{SCORE_COPY.noScore}</p>
+            ) : (
+              <BigScore score={score.score} />
+            )}
+            <ScoreMeta score={score} />
+          </div>
+          <ScoreAgain image={image} />
         </div>
       );
 
     case "multiple_faces":
       return (
-        <div className="space-y-2">
-          {score.score === null ? null : <BigScore score={score.score} />}
-          <p className="text-sm">{SCORE_COPY.multipleFaces(score.faceCount)}</p>
-          <ScoreMeta score={score} />
+        <div className="space-y-3">
+          <div className="space-y-2">
+            {score.score === null ? null : <BigScore score={score.score} />}
+            <p className="text-sm">
+              {SCORE_COPY.multipleFaces(score.faceCount)}
+            </p>
+            <ScoreMeta score={score} />
+          </div>
+          <ScoreAgain image={image} />
         </div>
       );
 
     case "no_face":
-      return <p className="text-sm">{SCORE_COPY.noFace}</p>;
+      return (
+        <div className="space-y-3">
+          <p className="text-sm">{SCORE_COPY.noFace}</p>
+          <ScoreAgain image={image} />
+        </div>
+      );
 
     case "low_quality":
-      return <p className="text-sm">{scoreReason(score)}</p>;
+      return (
+        <div className="space-y-3">
+          <p className="text-sm">{scoreReason(score)}</p>
+          <ScoreAgain image={image} />
+        </div>
+      );
 
     case "unavailable":
       return <Unavailable image={image} score={score} />;

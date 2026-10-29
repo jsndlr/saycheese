@@ -27,6 +27,9 @@ export async function deleteIfExists(
  * watermark past it), so any future code that removes a reference to a stored
  * object MUST delete that object itself. Dropping the reference alone would
  * leave the bytes in `_storage` forever because a later sweep skips them.
+ * `internal/archiveSweep` is such a path: it deletes the variants and the raw
+ * upload before unsetting the fields, because the orphan sweep will never
+ * revisit those objects.
  */
 export async function isStorageIdReferenced(
   ctx: QueryCtx,

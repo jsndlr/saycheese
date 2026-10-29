@@ -9,6 +9,7 @@ import { zid } from "convex-helpers/server/zod4";
 import { z } from "zod";
 
 import { internal } from "../_generated/api";
+import type { Id } from "../_generated/dataModel";
 import { authedMutation, fail } from "../functions";
 import { isProviderOutage } from "../internal/scoring";
 import { consume } from "../lib/rateLimits";
@@ -249,5 +250,52 @@ export const rescore = authedMutation({
 
     const updated = await ctx.db.get("images", args.id);
     return await toImageDto(ctx, updated ?? image);
+  },
+});
+
+/**
+ * Plan 4.4 archive. Archiving hides the row instead of deleting it: `archivedAt`
+ * removes it from every list and detail query, while the audit trail and the
+ * linked score row stay resolvable. The storage objects are not touched here;
+ * `internal/archiveSweep` deletes them once `ARCHIVE_RETENTION_MS` has passed,
+ * so an accidental archive is recoverable inside that window.
+ *
+ * Refused while the pipeline still holds the row. `uploaded`, `processing` and
+ * `scoring` all have a scheduled action that will write the row; hiding it
+ * underneath that action would race the write (and an archived image must
+ * never be rescored). `ready` is a legacy state no production transition
+ * produces, so it is not in the list.
+ *
+ * Idempotent in effect, not in response: a second call finds an archived row,
+ * `ownedImage` hides it, and the caller gets the same NOT_FOUND as for any id
+ * it can no longer reach. No rate limit: the operation is one owner-scoped
+ * field write and costs no provider work.
+ */
+export const archive = authedMutation({
+  args: { id: zid("images") },
+  permission: { resource: "image", action: "archive" },
+  handler: async (ctx, args): Promise<{ id: Id<"images"> }> => {
+    const image = await ownedImage(ctx, args.id);
+    if (
+      image.status === "uploaded" ||
+      image.status === "processing" ||
+      image.status === "scoring"
+    ) {
+      return fail("VALIDATION_FAILED");
+    }
+
+    const now = Date.now();
+    await ctx.db.patch("images", args.id, { archivedAt: now });
+    await ctx.db.insert("auditEvents", {
+      actorId: ctx.user.id,
+      action: "image.archive",
+      table: "images",
+      docId: args.id,
+      before: { status: image.status, archivedAt: null },
+      after: { status: image.status, archivedAt: now },
+      at: now,
+    });
+
+    return { id: image._id };
   },
 });

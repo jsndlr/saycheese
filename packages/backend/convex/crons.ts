@@ -26,4 +26,14 @@ crons.interval(
   {},
 );
 
+// Archived rows keep their storage objects for `ARCHIVE_RETENTION_MS` so a
+// mistaken archive stays recoverable. The sweep then deletes those objects and
+// keeps the row, which preserves audit history.
+crons.interval(
+  "purge archived images",
+  { hours: 24 },
+  internal.internal.archiveSweep.run,
+  {},
+);
+
 export default crons;
