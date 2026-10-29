@@ -11,8 +11,8 @@ import { toast } from "sonner";
 
 import { FormField } from "@/components/form-field";
 import { authClient } from "@/lib/auth-client";
-import { authErrorMessage } from "@/lib/auth-errors";
 import { parseSignUpInput } from "@/lib/auth-input";
+import { toUiError } from "@/lib/errors";
 import { firstFieldError } from "@/lib/form-error";
 import { revalidateShownError } from "@/lib/form-validation";
 
@@ -45,11 +45,11 @@ export default function SignUpForm() {
         });
 
         if (error) {
-          setServerError(authErrorMessage(error.code));
+          setServerError(toUiError(error).message);
           return;
         }
-      } catch {
-        setServerError(authErrorMessage(undefined));
+      } catch (error) {
+        setServerError(toUiError(error).message);
         return;
       }
 

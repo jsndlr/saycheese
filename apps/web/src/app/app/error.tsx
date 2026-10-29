@@ -4,21 +4,7 @@ import { Button } from "@saycheese/ui/components/button";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
-function isAuthRequired(error: Error): boolean {
-  if (error.message.includes("AUTH_REQUIRED")) {
-    return true;
-  }
-  if (!("data" in error)) {
-    return false;
-  }
-  const { data } = error;
-  return (
-    typeof data === "object" &&
-    data !== null &&
-    "code" in data &&
-    data.code === "AUTH_REQUIRED"
-  );
-}
+import { toUiError } from "@/lib/errors";
 
 export default function AppError({
   error,
@@ -28,7 +14,7 @@ export default function AppError({
   reset: () => void;
 }) {
   const router = useRouter();
-  const authRequired = isAuthRequired(error);
+  const authRequired = toUiError(error).code === "AUTH_REQUIRED";
 
   useEffect(() => {
     if (authRequired) {

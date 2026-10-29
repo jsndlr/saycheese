@@ -17,6 +17,7 @@ export const ERROR_CODES = [
   "SCORING_QUOTA",
   "SCORING_UNAVAILABLE",
   "NOT_FOUND",
+  "NETWORK",
   "INTERNAL",
 ] as const;
 
@@ -42,6 +43,7 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   SCORING_QUOTA: "Daily scoring limit reached.",
   SCORING_UNAVAILABLE: "Scoring is unavailable, try again.",
   NOT_FOUND: "Not found.",
+  NETWORK: "Check your connection and try again.",
   INTERNAL: "Something went wrong. Try again.",
 };
 

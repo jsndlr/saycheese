@@ -4,26 +4,7 @@ import { redirect } from "next/navigation";
 
 import AppView from "@/components/app-view";
 import { isAuthenticated, preloadAuthQuery } from "@/lib/auth-server";
-
-/**
- * Production sanitizes Server Component errors (digest only), so the client
- * error boundary cannot see ConvexError data. Detect AUTH_REQUIRED here and
- * redirect before rendering.
- */
-function isAuthRequiredError(error: unknown): boolean {
-  if (error !== null && typeof error === "object" && "data" in error) {
-    const { data } = error;
-    if (
-      typeof data === "object" &&
-      data !== null &&
-      "code" in data &&
-      data.code === "AUTH_REQUIRED"
-    ) {
-      return true;
-    }
-  }
-  return error instanceof Error && error.message.includes("AUTH_REQUIRED");
-}
+import { toUiError } from "@/lib/errors";
 
 export default async function AppPage() {
   if (!(await isAuthenticated())) {
@@ -34,7 +15,7 @@ export default async function AppPage() {
   try {
     preloaded = await preloadAuthQuery(api.queries.me.current, {});
   } catch (error) {
-    if (!isAuthRequiredError(error)) {
+    if (toUiError(error).code !== "AUTH_REQUIRED") {
       throw error;
     }
   }
