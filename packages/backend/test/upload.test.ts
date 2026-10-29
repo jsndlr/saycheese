@@ -381,19 +381,27 @@ it("rejects an unknown storage id with NOT_FOUND", async () => {
   expect(error.data).toMatchObject({ code: "NOT_FOUND" });
 });
 
-it("rejects reuse of a storage id already bound to an image", async () => {
+it("repeats a commit idempotently and rejects another user claiming the same object", async () => {
   const t = convexTest(schema, modules);
   registerRateLimiter(t, "rateLimiter");
-  const { asUser } = await signedIn(t);
+  const component = register(t, "betterAuth");
+  const { asUser: asOwner } = await createAccount(t, component, "owner@example.test");
+  const { asUser: asOther } = await createAccount(t, component, "other@example.test");
   const bytes = encoder.encode("reuse");
   const storageId = await store(t, bytes);
   const sha256 = await sha256Hex(bytes);
   const args = { storageId, sha256, bytes: bytes.length, mime: JPEG };
 
-  await asUser.mutation(commitUpload, args);
+  const first = await asOwner.mutation(commitUpload, args);
 
-  const error = await rejection(asUser.mutation(commitUpload, args));
+  // The uploader retries the same storage id when a commit response is lost.
+  const replay = await asOwner.mutation(commitUpload, args);
+  expect(replay).toEqual({ id: first.id, deduplicated: false });
+  expect(await storageExists(t, storageId)).toBe(true);
+  expect((await tables(t)).images).toHaveLength(1);
 
+  // Another account can never take over an object the first user owns.
+  const error = await rejection(asOther.mutation(commitUpload, args));
   expect(error.data).toMatchObject({ code: "VALIDATION_FAILED" });
   expect(await storageExists(t, storageId)).toBe(true);
   expect((await tables(t)).images).toHaveLength(1);

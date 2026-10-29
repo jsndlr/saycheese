@@ -21,12 +21,12 @@ type Page = { page: ImageDto[]; isDone: boolean; continueCursor: string };
 const list = makeFunctionReference<"query", { paginationOpts: PaginationOpts }, Page>(
   "queries/images:list",
 );
-const byId = makeFunctionReference<"query", { id: Id<"images"> }, ImageDto>(
+const byId = makeFunctionReference<"query", { id: string }, ImageDto>(
   "queries/images:byId",
 );
 const fileUrl = makeFunctionReference<
   "query",
-  { id: Id<"images">; variant: "original" | "preview" | "thumb" },
+  { id: string; variant: "original" | "preview" | "thumb" },
   { url: string | null }
 >("queries/images:fileUrl");
 
@@ -286,6 +286,22 @@ it("T-API-05 hides foreign, deleted and archived ids behind one NOT_FOUND payloa
   );
   for (const error of [anonymousList, anonymousById, anonymousUrl]) {
     expect(error.data).toMatchObject({ code: "AUTH_REQUIRED" });
+  }
+});
+
+it("T-API-05b answers a malformed or unknown id with NOT_FOUND, not a validator error", async () => {
+  const t = convexTest(schema, modules);
+  const { asUser } = await signedIn(t);
+
+  // A validator rejection happens before the handler and its message is not
+  // part of the production response, so these ids must reach the handler.
+  for (const id of ["nonsense", "j0000000000000000000000000000000", ""]) {
+    const viaById = await rejection(asUser.query(byId, { id }));
+    const viaUrl = await rejection(
+      asUser.query(fileUrl, { id, variant: "original" }),
+    );
+    expect(viaById.data).toMatchObject({ code: "NOT_FOUND" });
+    expect(viaUrl.data).toEqual(viaById.data);
   }
 });
 

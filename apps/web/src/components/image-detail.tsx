@@ -14,7 +14,9 @@ import { toast } from "sonner";
 import { AuthGate } from "@/components/auth-gate";
 import { ConfirmButton } from "@/components/confirm-button";
 import { LocalTime } from "@/components/local-time";
+import { PhotoNotFound } from "@/components/photo-not-found";
 import { ScorePanel } from "@/components/score-panel";
+import { signInPath } from "@/lib/auth-path";
 import { IMAGE_DETAIL_COPY } from "@/lib/copy";
 import { toUiError, type UiError } from "@/lib/errors";
 import { isImageNotFoundError } from "@/lib/image-not-found";
@@ -65,8 +67,16 @@ function ArchiveAction({
       router.push("/app");
       toast.success(IMAGE_DETAIL_COPY.archivedToast);
     } catch (cause) {
+      const failure = toUiError(cause);
+      // A retry after a lost response finds the row already archived. That is
+      // the outcome the caller asked for, not an error.
+      if (failure.code === "NOT_FOUND") {
+        router.push("/app");
+        toast.success(IMAGE_DETAIL_COPY.archivedToast);
+        return;
+      }
       suspend?.(false);
-      setError(toUiError(cause));
+      setError(failure);
       setPending(false);
     }
   }
@@ -89,6 +99,14 @@ function ArchiveAction({
       {error === null ? null : (
         <p role="alert" className="text-sm">
           {error.message}
+          {error.action === "sign-in" ? (
+            <>
+              {" "}
+              <Link href={signInPath("/app")} className="font-semibold underline">
+                {IMAGE_DETAIL_COPY.signIn}
+              </Link>
+            </>
+          ) : null}
         </p>
       )}
     </div>
@@ -172,22 +190,7 @@ class DetailBoundary extends Component<
 
   render() {
     if (!this.state.missing) return this.props.children;
-    return (
-      <div className="mx-auto w-full max-w-2xl px-4 py-16 sm:px-6">
-        <h1 className="mb-3 text-4xl font-extrabold">
-          {IMAGE_DETAIL_COPY.notFoundHeading}
-        </h1>
-        <p className="mb-6 text-muted-foreground">
-          {IMAGE_DETAIL_COPY.notFound}
-        </p>
-        <Link
-          href="/app"
-          className="press inline-flex h-11 items-center rounded-full bg-foreground px-6 text-sm font-semibold text-background hover:-translate-y-px hover:shadow-lift"
-        >
-          {IMAGE_DETAIL_COPY.back}
-        </Link>
-      </div>
-    );
+    return <PhotoNotFound />;
   }
 }
 

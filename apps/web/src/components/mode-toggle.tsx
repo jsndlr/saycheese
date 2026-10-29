@@ -9,7 +9,6 @@ import {
 } from "@saycheese/ui/components/dropdown-menu";
 import { Moon, Sun } from "@saycheese/ui/lib/icons";
 import { useTheme } from "next-themes";
-import * as React from "react";
 
 export function ModeToggle() {
   const { setTheme } = useTheme();

@@ -7,7 +7,7 @@ settings:
 catalogs:
   default:
     '@convex-dev/better-auth':
-      specifier: ^0.12.6
+      specifier: 0.12.6
       version: 0.12.6
     '@tailwindcss/postcss':
       specifier: ^4.3.3
@@ -137,9 +137,6 @@ importers:
       varlock:
         specifier: 'catalog:'
         version: 1.23.0
-      zod:
-        specifier: 'catalog:'
-        version: 4.6.7
     devDependencies:
       '@better-fetch/fetch':
         specifier: 1.3.3
@@ -242,6 +239,10 @@ importers:
   packages/config: {}
 
   packages/core:
+    dependencies:
+      zod:
+        specifier: 'catalog:'
+        version: 4.6.7
     devDependencies:
       '@saycheese/config':
         specifier: workspace:*
@@ -560,9 +561,6 @@ packages:
 
   '@better-auth/utils@0.5.1':
     resolution: {integrity: sha512-WETqw5vQ52uQ/xwWR4E8rTgT6fDEr/wnS+otDNkBCa/69281FCF32OKDdQUcahMCnjsvqXBNiEvAQHFB0EVRRg==}
-
-  '@better-fetch/fetch@1.3.1':
-    resolution: {integrity: sha512-ABkD1WhyfPZprKRQI3bhATjeiFuNWC9PXhfGWqL+sg/gKrM977oFrYkdb4msM3hgUGonr7KlOsOFT5TU2rht9g==}
 
   '@better-fetch/fetch@1.3.3':
     resolution: {integrity: sha512-U6SlDt/GUWtK2JAxS/NhdoYTEim+EL1G5byz2TUj83KjLZBUpYzb5SmX0aXaCnbGkAjFKnV/o/0+cyXMbEcqqg==}
@@ -3700,8 +3698,6 @@ snapshots:
     dependencies:
       '@noble/hashes': 2.4.0
 
-  '@better-fetch/fetch@1.3.1': {}
-
   '@better-fetch/fetch@1.3.3': {}
 
   '@borewit/text-codec@0.2.2': {}
@@ -3734,7 +3730,7 @@ snapshots:
 
   '@convex-dev/better-auth@0.12.6(patch_hash=c1507350dc6eae71670dc53b7abc9a17738ee73cf72f306b327904df65d1ba6e)(@standard-schema/spec@1.1.0)(better-auth@1.7.14(next@16.4.3(@types/node@26.6.5)(babel-plugin-react-compiler@1.0.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(varlock@1.23.0))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(vitest@4.1.12(@edge-runtime/vm@5.0.0)(@types/node@26.6.5)(jsdom@30.1.3(@noble/hashes@2.4.0))(vite@7.3.7(@types/node@26.6.5)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.15))))(convex@1.48.0(react@19.3.1))(react@19.3.1)(typescript@6.0.3)':
     dependencies:
-      '@better-fetch/fetch': 1.3.1
+      '@better-fetch/fetch': 1.3.3
       better-auth: 1.7.14(next@16.4.3(@types/node@26.6.5)(babel-plugin-react-compiler@1.0.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(varlock@1.23.0))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(vitest@4.1.12(@edge-runtime/vm@5.0.0)(@types/node@26.6.5)(jsdom@30.1.3(@noble/hashes@2.4.0))(vite@7.3.7(@types/node@26.6.5)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.15)))
       common-tags: 1.8.2
       convex: 1.48.0(react@19.3.1)

@@ -8,7 +8,6 @@ export {
   ChevronRightIcon,
   CircleCheckIcon,
   InfoIcon,
-  Loader2,
   Loader2Icon,
   Moon,
   OctagonXIcon,

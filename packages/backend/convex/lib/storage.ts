@@ -18,6 +18,21 @@ export async function deleteIfExists(
 }
 
 /**
+ * The row that owns this object as its raw upload, if any. A retried commit
+ * uses this to recognise its own previous attempt instead of rejecting the
+ * storage id it already bound.
+ */
+export async function rawUploadOwner(
+  ctx: QueryCtx,
+  storageId: Id<"_storage">,
+) {
+  return await ctx.db
+    .query("images")
+    .withIndex("by_raw_storage", (q) => q.eq("rawStorageId", storageId))
+    .first();
+}
+
+/**
  * True when any images row owns this storage object. Every field that can point
  * at `_storage` is checked, not just the raw upload: the process action replaces
  * `rawStorageId` with `storageId`, `previewId` and `thumbId`, and later phases
@@ -35,10 +50,7 @@ export async function isStorageIdReferenced(
   ctx: QueryCtx,
   storageId: Id<"_storage">,
 ): Promise<boolean> {
-  const raw = await ctx.db
-    .query("images")
-    .withIndex("by_raw_storage", (q) => q.eq("rawStorageId", storageId))
-    .first();
+  const raw = await rawUploadOwner(ctx, storageId);
   if (raw !== null) {
     return true;
   }

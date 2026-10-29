@@ -60,6 +60,11 @@ const HOURLY_WINDOW_MS = 60 * 60_000;
 
 export const RATE_LIMITS = {
   signIn: { limit: 10, windowMs: 15 * 60_000 },
+  // Used when the client address cannot be trusted (no proxy secret, or a
+  // direct caller). One shared bucket at the strict per-IP rate would let a
+  // single attacker lock every account out of sign-in, so this bucket is far
+  // more generous; the per-email bucket above still bounds one account.
+  signInShared: { limit: 200, windowMs: 15 * 60_000 },
   // Committed uploads, not minted URLs: one URL can be reused until it expires.
   upload: { limit: 30, windowMs: HOURLY_WINDOW_MS },
   // Twice the commit allowance: minting is cheap and a client may legitimately

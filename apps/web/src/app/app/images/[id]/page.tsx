@@ -1,5 +1,4 @@
 import { api } from "@saycheese/backend/convex/_generated/api";
-import type { Id } from "@saycheese/backend/convex/_generated/dataModel";
 import type { Preloaded } from "convex/react";
 import { notFound, redirect } from "next/navigation";
 
@@ -34,9 +33,9 @@ export default async function ImagePage({
     // paints the preview on the first frame instead of shifting the panel when
     // the storage URL arrives.
     [preloaded, preloadedOriginal] = await Promise.all([
-      preloadAuthQuery(api.queries.images.byId, { id: id as Id<"images"> }),
+      preloadAuthQuery(api.queries.images.byId, { id }),
       preloadAuthQuery(api.queries.images.fileUrl, {
-        id: id as Id<"images">,
+        id,
         variant: "original",
       }),
     ]);

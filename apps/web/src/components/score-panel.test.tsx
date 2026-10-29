@@ -223,7 +223,51 @@ describe("ScorePanel", () => {
     expect(rescore).toHaveBeenCalledWith({ id: "image-1" });
   });
 
-  it("disables the rescore button while the mutation is pending", async () => {
+  it("keeps the rescore button disabled until the new score row arrives", async () => {
+    const pending = Promise.withResolvers<ImageDto>();
+    rescore.mockReturnValue(pending.promise);
+    const unavailable = score({
+      status: "unavailable",
+      score: null,
+      confidence: null,
+      reason: "Scoring is unavailable",
+    });
+    const { rerender } = renderPanel(image({ score: unavailable }));
+
+    const button = screen.getByRole("button", {
+      name: "Try scoring again",
+    }) as HTMLButtonElement;
+    fireEvent.click(button);
+    await act(async () => {});
+
+    expect(button.disabled).toBe(true);
+    expect(rescore).toHaveBeenCalledOnce();
+
+    // The mutation resolving is not the same as the panel updating: the live
+    // query still reports the old score for a moment, and a re-enabled button
+    // there would send a second request the server refuses.
+    await act(async () => {
+      pending.resolve(image());
+    });
+    expect(button.disabled).toBe(true);
+
+    rerender(
+      <ScorePanel
+        image={image({ score: score({ id: "score-2" as Id<"scores"> }) })}
+        previewUrl={null}
+        onChangeFile={vi.fn()}
+      />,
+    );
+    // The unavailable view is gone; the scored view has its own button.
+    expect(button.isConnected).toBe(false);
+    expect(
+      (screen.getByRole("button", { name: "Score again" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false);
+  });
+
+  it("re-enables rescore if the row never changes after a successful call", async () => {
+    vi.useFakeTimers();
     const pending = Promise.withResolvers<ImageDto>();
     rescore.mockReturnValue(pending.promise);
     renderPanel(
@@ -237,19 +281,39 @@ describe("ScorePanel", () => {
       }),
     );
 
-    const button = screen.getByRole("button", {
-      name: "Try scoring again",
-    }) as HTMLButtonElement;
-    fireEvent.click(button);
+    fireEvent.click(buttonOf());
     await act(async () => {});
-
-    expect(button.disabled).toBe(true);
-    expect(rescore).toHaveBeenCalledOnce();
-
     await act(async () => {
       pending.resolve(image());
     });
-    expect(button.disabled).toBe(false);
+    expect(buttonOf().disabled).toBe(true);
+
+    await act(async () => {
+      vi.advanceTimersByTime(15_000);
+    });
+    expect(buttonOf().disabled).toBe(false);
+  });
+
+  it("offers a sign-in link when a rescore reports an expired session", async () => {
+    rescore.mockRejectedValue(
+      new ConvexError({ code: "AUTH_REQUIRED", message: "Sign in to continue." }),
+    );
+    renderPanel(
+      image({
+        score: score({
+          status: "unavailable",
+          score: null,
+          confidence: null,
+          reason: "Scoring is unavailable",
+        }),
+      }),
+    );
+
+    fireEvent.click(buttonOf());
+    await act(async () => {});
+
+    const link = screen.getByRole("link", { name: "Sign in" });
+    expect(link.getAttribute("href")).toBe("/sign-in?next=%2Fapp");
   });
 
   it("hides rescore for a quota result until its window has reset", async () => {
@@ -390,13 +454,14 @@ describe("ScorePanel", () => {
     ).toBe(true);
     expect(rescore).toHaveBeenCalledOnce();
 
+    // Resolving is not the end: the button waits for the new score row.
     await act(async () => {
       pending.resolve(image());
     });
     expect(
       (screen.getByRole("button", { name: "Score again" }) as HTMLButtonElement)
         .disabled,
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("counts down a rate-limited forced rescore", async () => {

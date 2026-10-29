@@ -14,7 +14,7 @@ import { authedMutation, fail } from "../functions";
 import { isProviderOutage } from "../internal/scoring";
 import { consume } from "../lib/rateLimits";
 import { scoringPool } from "../lib/scoringPool";
-import { isStorageIdReferenced } from "../lib/storage";
+import { isStorageIdReferenced, rawUploadOwner } from "../lib/storage";
 import type { ImageDto } from "../model/images";
 import { ownedImage, toImageDto } from "../model/images";
 
@@ -115,6 +115,18 @@ export const commitUpload = authedMutation({
 
     if (exceedsByteCap(metadata.size)) {
       return fail("PAYLOAD_TOO_LARGE");
+    }
+
+    // A retried commit must be idempotent. If the caller's own row already owns
+    // this exact raw upload, the earlier attempt succeeded and only its
+    // response was lost (the uploader retries the same storage id after a
+    // network error). Anything else referencing the object is still rejected.
+    const owner = await rawUploadOwner(ctx, args.storageId);
+    if (owner !== null) {
+      if (owner.userId === ctx.user.id && owner.sha256 === serverSha256) {
+        return { id: owner._id, deduplicated: false };
+      }
+      return fail("VALIDATION_FAILED");
     }
 
     // A storage id is not bound to a user and every id is guessable only if it
@@ -225,6 +237,7 @@ export const rescore = authedMutation({
       quotaExceeded: undefined,
       failureCode: undefined,
       scoringStartedAt: now,
+      scoringJobStartedAt: undefined,
       scoringRun: run,
     });
     await ctx.db.insert("auditEvents", {

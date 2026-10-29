@@ -1,17 +1,20 @@
 "use client";
 
 import { api } from "@saycheese/backend/convex/_generated/api";
+import type { Id } from "@saycheese/backend/convex/_generated/dataModel";
 import type {
   ImageDto,
   ImageScoreDto,
 } from "@saycheese/backend/convex/model/images";
 import { Button } from "@saycheese/ui/components/button";
-import { Loader2 } from "@saycheese/ui/lib/icons";
+import { Loader2Icon } from "@saycheese/ui/lib/icons";
 import { useMutation } from "convex/react";
-import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ConfirmButton } from "@/components/confirm-button";
 import { LocalTime } from "@/components/local-time";
+import { signInPath } from "@/lib/auth-path";
 import { SCORE_COPY } from "@/lib/copy";
 import { formatLocalTime } from "@/lib/relative-time";
 import {
@@ -112,7 +115,7 @@ function terminalAnnouncement(image: ImageDto): string | null {
 
 function Spinner() {
   return (
-    <Loader2
+    <Loader2Icon
       aria-hidden="true"
       className="size-4 animate-spin text-primary-text motion-reduce:hidden"
     />
@@ -175,6 +178,96 @@ function BigScore({ score }: { score: number }) {
 }
 
 /**
+ * One rescore, shared by the unavailable path and the confirmed re-run.
+ *
+ * `pending` survives a successful call on purpose: the live `byId` query needs
+ * a moment to flip the image to `scoring`, and a button that re-enables in that
+ * gap invites a second request the server refuses. It clears when the linked
+ * score row changes (the rescore landed), with a timer as the fallback so a
+ * panel can never stay disabled forever.
+ */
+function useRescore(imageId: Id<"images">, scoreId: string, force: boolean) {
+  const rescore = useMutation(api.commands.images.rescore);
+  const countdown = useWaitCountdown();
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<UiError | null>(null);
+
+  useEffect(() => {
+    setPending(false);
+    setError(null);
+  }, [scoreId]);
+
+  useEffect(() => {
+    if (!pending) {
+      return;
+    }
+    const timer = setTimeout(() => setPending(false), 15_000);
+    return () => clearTimeout(timer);
+  }, [pending]);
+
+  const run = useCallback(async () => {
+    if (pending) {
+      return;
+    }
+    setPending(true);
+    setError(null);
+    countdown.clear();
+    try {
+      await rescore(force ? { id: imageId, force: true } : { id: imageId });
+    } catch (cause) {
+      const ui = toUiError(cause);
+      setError(ui);
+      setPending(false);
+      if (ui.action === "wait") {
+        countdown.start(ui.retryAfterMs ?? 0);
+      }
+    }
+  }, [countdown, force, imageId, pending, rescore]);
+
+  return {
+    run,
+    pending,
+    error,
+    countdown,
+    disabled: pending || countdown.waiting,
+  };
+}
+
+/** The retry text plus a countdown and, for an expired session, a way back in. */
+function RescoreError({
+  error,
+  countdown,
+}: {
+  error: UiError;
+  countdown: ReturnType<typeof useWaitCountdown>;
+}) {
+  return (
+    <div role="alert" className="space-y-1">
+      <p className="text-sm">
+        {error.message}
+        {error.action === "sign-in" ? (
+          <>
+            {" "}
+            <Link href={signInPath("/app")} className="font-semibold underline">
+              {SCORE_COPY.signIn}
+            </Link>
+          </>
+        ) : null}
+      </p>
+      {error.action === "wait" && countdown.waiting ? (
+        <p
+          role="status"
+          aria-live="polite"
+          className="text-xs text-muted-foreground"
+        >
+          {formatRetryAfter(countdown.remainingMs)}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
  * An unavailable score can be retried in place. A quota row only offers the
  * action once its own window has reset; before that the reset time is the only
  * truthful thing to show. The live `byId` query flips the panel to `scoring`
@@ -187,17 +280,19 @@ function Unavailable({
   image: ImageDto;
   score: ImageScoreDto;
 }) {
-  const rescore = useMutation(api.commands.images.rescore);
-  const countdown = useWaitCountdown();
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<UiError | null>(null);
+  const { run, error, countdown, disabled } = useRescore(
+    image.id,
+    score.id,
+    false,
+  );
   const [now, setNow] = useState(() => Date.now());
 
   const resetAt = quotaResetAt(score.createdAt);
   const quotaBlocked = image.quotaExceeded && now < resetAt;
 
   // A panel left open across the reset must offer the action without waiting
-  // for an unrelated render.
+  // for an unrelated render. The timer re-arms until the clock has passed the
+  // reset, so a backwards clock step cannot strand the button.
   useEffect(() => {
     if (!quotaBlocked) {
       return;
@@ -207,31 +302,9 @@ function Unavailable({
       Math.max(1, resetAt - Date.now()),
     );
     return () => clearTimeout(timer);
-  }, [quotaBlocked, resetAt]);
+  }, [quotaBlocked, resetAt, now]);
 
   const canRescore = !quotaBlocked;
-  const disabled = pending || countdown.waiting;
-
-  async function run() {
-    if (disabled) {
-      return;
-    }
-    setPending(true);
-    setError(null);
-    countdown.clear();
-
-    try {
-      await rescore({ id: image.id });
-    } catch (cause) {
-      const ui = toUiError(cause);
-      setError(ui);
-      if (ui.action === "wait") {
-        countdown.start(ui.retryAfterMs ?? 0);
-      }
-    } finally {
-      setPending(false);
-    }
-  }
 
   return (
     <div className="space-y-3">
@@ -261,18 +334,7 @@ function Unavailable({
             {SCORE_COPY.rescore}
           </Button>
           {error !== null ? (
-            <div role="alert" className="space-y-1">
-              <p className="text-sm">{error.message}</p>
-              {error.action === "wait" && countdown.waiting ? (
-                <p
-                  role="status"
-                  aria-live="polite"
-                  className="text-xs text-muted-foreground"
-                >
-                  {formatRetryAfter(countdown.remainingMs)}
-                </p>
-              ) : null}
-            </div>
+            <RescoreError error={error} countdown={countdown} />
           ) : null}
         </div>
       ) : null}
@@ -285,34 +347,18 @@ function Unavailable({
  * spends a rescore token, so it sits behind a confirmation step; the shared
  * `RATE_LIMITED` countdown keeps the button disabled until the window refills.
  */
-function ScoreAgain({ image }: { image: ImageDto }) {
-  const rescore = useMutation(api.commands.images.rescore);
-  const countdown = useWaitCountdown();
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<UiError | null>(null);
-
-  const disabled = pending || countdown.waiting;
-
-  async function run() {
-    if (disabled) {
-      return;
-    }
-    setPending(true);
-    setError(null);
-    countdown.clear();
-
-    try {
-      await rescore({ id: image.id, force: true });
-    } catch (cause) {
-      const ui = toUiError(cause);
-      setError(ui);
-      if (ui.action === "wait") {
-        countdown.start(ui.retryAfterMs ?? 0);
-      }
-    } finally {
-      setPending(false);
-    }
-  }
+function ScoreAgain({
+  image,
+  score,
+}: {
+  image: ImageDto;
+  score: ImageScoreDto;
+}) {
+  const { run, error, countdown, disabled } = useRescore(
+    image.id,
+    score.id,
+    true,
+  );
 
   return (
     <div className="space-y-2">
@@ -322,22 +368,11 @@ function ScoreAgain({ image }: { image: ImageDto }) {
         variant="outline"
         size="xs"
         disabled={countdown.waiting}
-        pending={pending}
+        pending={disabled}
         onConfirm={() => void run()}
       />
       {error !== null ? (
-        <div role="alert" className="space-y-1">
-          <p className="text-sm">{error.message}</p>
-          {error.action === "wait" && countdown.waiting ? (
-            <p
-              role="status"
-              aria-live="polite"
-              className="text-xs text-muted-foreground"
-            >
-              {formatRetryAfter(countdown.remainingMs)}
-            </p>
-          ) : null}
-        </div>
+        <RescoreError error={error} countdown={countdown} />
       ) : null}
     </div>
   );
@@ -346,11 +381,9 @@ function ScoreAgain({ image }: { image: ImageDto }) {
 function ScoreResult({
   image,
   score,
-  onChangeFile,
 }: {
   image: ImageDto;
   score: ImageScoreDto;
-  onChangeFile: () => void;
 }) {
   switch (score.status) {
     case "scored":
@@ -364,7 +397,7 @@ function ScoreResult({
             )}
             <ScoreMeta score={score} />
           </div>
-          <ScoreAgain image={image} />
+          <ScoreAgain image={image} score={score} />
         </div>
       );
 
@@ -378,7 +411,7 @@ function ScoreResult({
             </p>
             <ScoreMeta score={score} />
           </div>
-          <ScoreAgain image={image} />
+          <ScoreAgain image={image} score={score} />
         </div>
       );
 
@@ -386,7 +419,7 @@ function ScoreResult({
       return (
         <div className="space-y-3">
           <p className="text-sm">{SCORE_COPY.noFace}</p>
-          <ScoreAgain image={image} />
+          <ScoreAgain image={image} score={score} />
         </div>
       );
 
@@ -394,7 +427,7 @@ function ScoreResult({
       return (
         <div className="space-y-3">
           <p className="text-sm">{scoreReason(score)}</p>
-          <ScoreAgain image={image} />
+          <ScoreAgain image={image} score={score} />
         </div>
       );
 
@@ -503,11 +536,7 @@ export function ScorePanel({
       ) : image.status === "failed" ? (
         <Failed image={image} onChangeFile={onChangeFile} />
       ) : image.status === "scored" && image.score !== null ? (
-        <ScoreResult
-          image={image}
-          score={image.score}
-          onChangeFile={onChangeFile}
-        />
+        <ScoreResult image={image} score={image.score} />
       ) : (
         <p className="text-sm">{SCORE_COPY.noScore}</p>
       )}

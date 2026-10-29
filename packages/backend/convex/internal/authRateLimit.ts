@@ -8,11 +8,13 @@ import { consumeSignIn } from "../lib/rateLimits";
  * Convex deployment, so the limit cannot be bypassed by calling the Convex
  * HTTP endpoint directly (unlike a check in the Next.js proxy).
  *
- * `email` is already normalised by the hook; `ip` is the limiter key for the
- * client address (the literal "unknown" groups requests without one).
+ * `email` is already normalised by the hook. `ip` is the verified client
+ * address, or `null` when the address could not be trusted (no proxy secret,
+ * or a direct caller): those attempts share one generous bucket instead of a
+ * strict bucket keyed on a constant.
  */
 export const consume = internalMutation({
-  args: { email: v.string(), ip: v.string() },
+  args: { email: v.string(), ip: v.union(v.string(), v.null()) },
   handler: async (ctx, { email, ip }) => {
     return await consumeSignIn(ctx, email, ip);
   },

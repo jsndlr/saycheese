@@ -145,18 +145,18 @@ Hybrid: tonal layering for surfaces, shadow only for objects that physically sit
 - **Lift** (`0 1px 0 oklch(0.2 0.05 25 / 6%), 0 10px 24px -10px oklch(0.2 0.08 25 / 28%)`): hovered buttons, thumbnails, menus, the score panel.
 
 ### Named Rules
-**The One Elevation Rule.** An object has a border or a shadow, never both. Hard offset shadows are not used.
+**The One Elevation Rule.** An object has a border or a shadow, never both. Panels are the one exception: they carry the Lift shadow plus a hairline ring that reads as the print edge, not a border. Hard offset shadows are not used.
 
 ## Shapes
 
-Two forms. Cut paper: frames, thumbnails and photo prints are near-square (3px) with a 10px white print border. Soft pills and slabs: buttons and chips are fully rounded, inputs are 12px, panels and cards are 24px. The curtain is drawn as soft vertical folds of light (`.curtain`), never stripes.
+Two forms. Cut paper: frames, thumbnails and photo prints are near-square (3px) with a 10px white print border. Soft pills and slabs: buttons and chips are fully rounded, inputs are 16px (`rounded-xl`), panels and cards are 24px. The curtain is drawn as soft vertical folds of light (`.curtain`), never stripes.
 
 ## Components
 
 ### Buttons
 - **Shape:** full pill, 44px tall by default, 52px for hero actions.
 - **Primary:** curtain red with paper text; on red or ink grounds the lamp-yellow variant with ink text.
-- **Hover / Focus / Press:** lifts 1px with the Lift shadow; focus is a 4px ring at 30% of the ring colour; pressing scales to 0.97 (`.press`).
+- **Hover / Focus / Press:** lifts 1px with the Lift shadow; focus is a 4px ring at 40% of the ring colour plus a 2px offset ring in the background colour; pressing scales to 0.97 (`.press`).
 - **Outline / Ghost:** paper with an input-coloured border, or transparent with a muted hover.
 
 ### Chips
@@ -168,7 +168,7 @@ Two forms. Cut paper: frames, thumbnails and photo prints are near-square (3px) 
 - **Padding:** 1.25rem to 2.5rem.
 
 ### Inputs / Fields
-- **Style:** 48px tall, 12px radius, card background, 1px input border.
+- **Style:** 48px tall, 16px radius, card background, 1px input border.
 - **Focus:** border shifts to the ring colour with a 4px soft ring. Errors reserve their line so the form never jumps.
 
 ### Navigation

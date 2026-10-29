@@ -159,11 +159,19 @@ async function accessToken(
       signal,
     });
   } catch (error) {
-    // Every token exchange failure, including transport and abort, is fatal:
-    // retrying or falling back would repeat a configuration problem, and the
-    // scoring action must not burn its retry budget on credentials.
+    // A transport failure is a network condition, not a credential problem:
+    // mark it retryable so one retry (and the configured fallback) can still
+    // answer. An abort is the caller's timeout and is reported as such.
+    if (signal?.aborted) {
+      throw new ProviderError(
+        "retryable",
+        "token_exchange_aborted",
+        "Google OAuth token exchange was aborted.",
+        { cause: error },
+      );
+    }
     throw new ProviderError(
-      "fatal",
+      "retryable",
       "token_exchange_failed",
       "Google OAuth token endpoint is unreachable.",
       { cause: error },
@@ -171,8 +179,11 @@ async function accessToken(
   }
 
   if (!response.ok) {
+    // 5xx and 429 are transient on Google's side; 4xx is a credential or
+    // configuration fault that a retry would only repeat.
+    const transient = response.status >= 500 || response.status === 429;
     throw new ProviderError(
-      "fatal",
+      transient ? "retryable" : "fatal",
       "token_exchange_failed",
       `Google OAuth token endpoint returned HTTP ${response.status}.`,
     );

@@ -5,7 +5,9 @@ allowBuilds:
   esbuild: true
   sharp: true
 catalog:
-  "@convex-dev/better-auth": ^0.12.6
+  # Pinned exactly: patches/ keys off 0.12.6, and a caret range would let a
+  # 0.12.7 install silently drop the Better Auth 1.7 compatibility patch.
+  "@convex-dev/better-auth": 0.12.6
   "@tailwindcss/postcss": ^4.3.3
   "@types/node": ^26.4.1
   "@types/react": ^19.2.18

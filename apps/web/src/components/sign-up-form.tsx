@@ -4,6 +4,7 @@ import { ERROR_MESSAGES } from "@saycheese/core/errors";
 import { signUpSchema } from "@saycheese/core/validation";
 import { Button } from "@saycheese/ui/components/button";
 import { useForm } from "@tanstack/react-form";
+import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -16,7 +17,7 @@ import { toUiError } from "@/lib/errors";
 import { firstFieldError } from "@/lib/form-error";
 import { revalidateShownError } from "@/lib/form-validation";
 
-export default function SignUpForm() {
+export default function SignUpForm({ nextPath }: { nextPath: string }) {
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -54,7 +55,7 @@ export default function SignUpForm() {
       }
 
       toast.success("Account created");
-      router.push("/app");
+      router.push(nextPath as Route);
       router.refresh();
     },
   });

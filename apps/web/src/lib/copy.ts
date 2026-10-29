@@ -60,6 +60,7 @@ export const IMAGE_DETAIL_COPY = {
   archivePending: "Archiving…",
   archiveBlocked: "Wait until scoring finishes",
   archivedToast: "Photo archived",
+  signIn: "Sign in",
 } as const;
 
 /** Shared labels for the inline confirm step; both flows must read the same. */
@@ -84,7 +85,6 @@ export const SCORE_COPY = {
   multipleFaces: (count: number) =>
     `Scored the largest of ${count} ${count === 1 ? "face" : "faces"}`,
   noFace: "No face detected",
-  lowQualityFallback: "Photo quality is too low to score",
   unavailableFallback: "Scoring is unavailable",
   quotaReset: (when: string) => `Your daily limit resets on ${when}.`,
   quotaResetPrefix: "Your daily limit resets on",
@@ -101,4 +101,5 @@ export const SCORE_COPY = {
     `Smile score ${score} out of 100. Scored the largest of ${count} ${count === 1 ? "face" : "faces"}.`,
   announceConfidence: (percent: number) => `Confidence ${percent} percent.`,
   announceCached: "This is a cached result.",
+  signIn: "Sign in",
 } as const;

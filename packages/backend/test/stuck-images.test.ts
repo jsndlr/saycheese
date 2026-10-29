@@ -43,6 +43,7 @@ async function insertImage(
     createdAt: number;
     processingStartedAt?: number;
     scoringStartedAt?: number;
+    scoringJobStartedAt?: number;
     storage?: boolean;
     storageMissing?: boolean;
   },
@@ -76,6 +77,7 @@ async function insertImage(
       status: fields.status,
       processingStartedAt: fields.processingStartedAt,
       scoringStartedAt: fields.scoringStartedAt,
+      scoringJobStartedAt: fields.scoringJobStartedAt,
       createdAt: fields.createdAt,
     });
     return { imageId, storageIds };
@@ -226,6 +228,7 @@ it("records unavailable for scoring rows past the timeout, not a failure", async
     status: "scoring",
     createdAt: now - OLD_MS,
     scoringStartedAt: now - SCORING_TIMEOUT_MS - 60_000,
+    scoringJobStartedAt: now - SCORING_TIMEOUT_MS - 60_000,
   });
 
   const result = await t.mutation(runSweep, {});
@@ -266,6 +269,83 @@ it("records unavailable for scoring rows past the timeout, not a failure", async
   });
 });
 
+it("waits for a queued scoring job that has not started yet", async () => {
+  const t = convexTest(schema, modules);
+  const now = Date.now();
+  // Enqueued past the scoring timeout, but no workpool slot yet: a backlog is
+  // not a dead action, so the row must stay `scoring`.
+  const { imageId } = await insertImage(t, {
+    status: "scoring",
+    createdAt: now - OLD_MS,
+    scoringStartedAt: now - SCORING_TIMEOUT_MS - 60_000,
+  });
+  const before = await imageRow(t, imageId);
+
+  const result = await t.mutation(runSweep, {});
+
+  expect(result).toMatchObject({ scoringChecked: 0, scoringRecorded: 0 });
+  expect(await imageRow(t, imageId)).toEqual(before);
+  expect(await audits(t)).toHaveLength(0);
+});
+
+it("settles a queued scoring job that never started within the grace", async () => {
+  const t = convexTest(schema, modules);
+  const now = Date.now();
+  const { imageId } = await insertImage(t, {
+    status: "scoring",
+    createdAt: now - OLD_MS,
+    scoringStartedAt: now - 60 * 60_000,
+  });
+
+  const result = await t.mutation(runSweep, {});
+
+  expect(result).toMatchObject({ scoringChecked: 1, scoringRecorded: 1 });
+  expect(await imageRow(t, imageId)).toMatchObject({ status: "scored" });
+});
+
+it("keeps a started scoring job until its own timeout passes", async () => {
+  const t = convexTest(schema, modules);
+  const now = Date.now();
+  const { imageId } = await insertImage(t, {
+    status: "scoring",
+    createdAt: now - OLD_MS,
+    scoringStartedAt: now - 60 * 60_000,
+    scoringJobStartedAt: now - 60_000,
+  });
+  const before = await imageRow(t, imageId);
+
+  const result = await t.mutation(runSweep, {});
+
+  expect(result).toMatchObject({ scoringChecked: 0, scoringRecorded: 0 });
+  expect(await imageRow(t, imageId)).toEqual(before);
+});
+
+it("reaches an expired job behind slow-but-alive jobs in the same batch", async () => {
+  const t = convexTest(schema, modules);
+  const now = Date.now();
+  // Oldest enqueue first: two queued jobs still inside their grace sit ahead
+  // of one whose action started long ago and died. A batch of 2 must not stop
+  // at the slow pair.
+  for (const extra of [120_000, 90_000]) {
+    await insertImage(t, {
+      status: "scoring",
+      createdAt: now - OLD_MS,
+      scoringStartedAt: now - SCORING_TIMEOUT_MS - extra,
+    });
+  }
+  const { imageId } = await insertImage(t, {
+    status: "scoring",
+    createdAt: now - OLD_MS,
+    scoringStartedAt: now - SCORING_TIMEOUT_MS - 30_000,
+    scoringJobStartedAt: now - SCORING_TIMEOUT_MS - 10_000,
+  });
+
+  const result = await t.mutation(runSweep, { batchSize: 2 });
+
+  expect(result).toMatchObject({ scoringRecorded: 1 });
+  expect(await imageRow(t, imageId)).toMatchObject({ status: "scored" });
+});
+
 it("ignores a scoring row without a scoring timestamp, however old", async () => {
   const t = convexTest(schema, modules);
   const now = Date.now();
@@ -280,6 +360,26 @@ it("ignores a scoring row without a scoring timestamp, however old", async () =>
   expect(result).toMatchObject({ scoringChecked: 0, scoringRecorded: 0 });
   expect(await imageRow(t, imageId)).toEqual(before);
   expect(await audits(t)).toHaveLength(0);
+});
+
+it("fails a processing row that predates the start timestamp", async () => {
+  const t = convexTest(schema, modules);
+  const now = Date.now();
+  // No `processingStartedAt`: the timestamped index cannot see this row, so a
+  // longer grace applies instead of leaving it stuck forever.
+  const { imageId, storageIds } = await insertImage(t, {
+    status: "processing",
+    createdAt: now - PROCESSING_TIMEOUT_MS * 4 - 60_000,
+  });
+
+  const result = await t.mutation(runSweep, {});
+
+  expect(result).toMatchObject({ processingChecked: 1, processingFailed: 1 });
+  expect(await imageRow(t, imageId)).toMatchObject({
+    status: "failed",
+    failureCode: "IMAGE_TIMEOUT",
+  });
+  expect(await storageExists(t, storageIds[0]!)).toBe(false);
 });
 
 it("never touches ready, scoring or scored rows, however old", async () => {

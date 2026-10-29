@@ -1,9 +1,10 @@
 import { paginationOptsValidator } from "convex/server";
 import type { PaginationResult } from "convex/server";
-import { convexToZod, zid } from "convex-helpers/server/zod4";
+import { convexToZod } from "convex-helpers/server/zod4";
 import { z } from "zod";
 
-import { authedQuery } from "../functions";
+import type { Id } from "../_generated/dataModel";
+import { authedQuery, fail } from "../functions";
 import type { ImageDto } from "../model/images";
 import { ownedImage, toImageDto } from "../model/images";
 
@@ -13,6 +14,30 @@ import { ownedImage, toImageDto } from "../model/images";
  * fields and rejects unknown ones.
  */
 const paginationOpts = convexToZod(paginationOptsValidator);
+
+/**
+ * Image ids arrive as plain strings so a malformed id is a `NOT_FOUND` for the
+ * caller, not a validator rejection. The validator runs before the handler and
+ * its message is not part of the response in production, so an id such as
+ * `/app/images/nonsense` would otherwise surface as an unclassified 500.
+ */
+const imageId = z.string().max(128);
+
+async function resolveImageId(
+  ctx: { db: { normalizeId: (table: "images", id: string) => Id<"images"> | null } },
+  id: string,
+): Promise<Id<"images">> {
+  let normalized: Id<"images"> | null;
+  try {
+    normalized = ctx.db.normalizeId("images", id);
+  } catch {
+    normalized = null;
+  }
+  if (normalized === null) {
+    return fail("NOT_FOUND");
+  }
+  return normalized;
+}
 
 export const list = authedQuery({
   args: { paginationOpts },
@@ -38,20 +63,23 @@ export const list = authedQuery({
 });
 
 export const byId = authedQuery({
-  args: { id: zid("images") },
+  args: { id: imageId },
   permission: { resource: "image", action: "read" },
-  handler: async (ctx, args): Promise<ImageDto> =>
-    toImageDto(ctx, await ownedImage(ctx, args.id)),
+  handler: async (ctx, args): Promise<ImageDto> => {
+    const id = await resolveImageId(ctx, args.id);
+    return toImageDto(ctx, await ownedImage(ctx, id));
+  },
 });
 
 export const fileUrl = authedQuery({
   args: {
-    id: zid("images"),
+    id: imageId,
     variant: z.enum(["original", "preview", "thumb"]),
   },
   permission: { resource: "image", action: "read" },
   handler: async (ctx, args): Promise<{ url: string | null }> => {
-    const image = await ownedImage(ctx, args.id);
+    const id = await resolveImageId(ctx, args.id);
+    const image = await ownedImage(ctx, id);
     const storageId =
       args.variant === "original"
         ? image.storageId

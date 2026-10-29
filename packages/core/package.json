@@ -19,5 +19,8 @@
     "@saycheese/config": "workspace:*",
     "typescript": "catalog:",
     "vitest": "^4.1.12"
+  },
+  "dependencies": {
+    "zod": "catalog:"
   }
 }

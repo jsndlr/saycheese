@@ -1,9 +1,10 @@
 "use client";
 
 import { Button } from "@saycheese/ui/components/button";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
+import { signInPath } from "@/lib/auth-path";
 import { toUiError } from "@/lib/errors";
 
 export default function AppError({
@@ -14,13 +15,14 @@ export default function AppError({
   reset: () => void;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const authRequired = toUiError(error).code === "AUTH_REQUIRED";
 
   useEffect(() => {
     if (authRequired) {
-      router.replace("/sign-in?next=/app");
+      router.replace(signInPath(pathname));
     }
-  }, [authRequired, router]);
+  }, [authRequired, pathname, router]);
 
   if (authRequired) {
     return (

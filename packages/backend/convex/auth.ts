@@ -84,10 +84,11 @@ function signInRateLimit(ctx: GenericCtx<DataModel>) {
       // reach here and has no mutation runner.
       return;
     }
-    const ip = signInIpKey(requestCtx.headers, env.AUTH_PROXY_SECRET);
+    const ipKey = signInIpKey(requestCtx.headers, env.AUTH_PROXY_SECRET);
     const status = await ctx.runMutation(internal.internal.authRateLimit.consume, {
       email,
-      ip,
+      // "direct" means the address is unverified: the shared bucket covers it.
+      ip: ipKey === "direct" ? null : ipKey,
     });
     if (status.ok) {
       return;
@@ -106,7 +107,11 @@ function signInRateLimit(ctx: GenericCtx<DataModel>) {
 function createAuth(ctx: GenericCtx<DataModel>) {
   return betterAuth({
     baseURL: env.SITE_URL,
-    trustedOrigins: [env.SITE_URL],
+    // The Next proxy forwards the browser's Origin unchanged, so every origin
+    // the app is served from must be listed: preview deployments and any extra
+    // hostname in TRUSTED_ORIGINS. Without this a preview build fails sign-in
+    // with INVALID_ORIGIN, which the UI can only report as a generic error.
+    trustedOrigins: [env.SITE_URL, ...(env.TRUSTED_ORIGINS ?? [])],
     database: authComponent.adapter(ctx),
     hooks: {
       before: signInRateLimit(ctx),

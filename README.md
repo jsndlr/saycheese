@@ -76,7 +76,7 @@ pnpm run dev:setup
 
 Follow the prompts to create a new Convex project and connect it to your application.
 
-Copy environment variables from `packages/backend/.env.local` to `apps/*/.env`.
+The web app reads its own public keys, so copy them under their public names: `CONVEX_URL` → `NEXT_PUBLIC_CONVEX_URL` and `CONVEX_SITE_URL` → `NEXT_PUBLIC_CONVEX_SITE_URL` in `apps/web/.env.local`. A literal copy fails Varlock validation.
 
 Then, run the development server:
 
@@ -118,7 +118,7 @@ If you want to add app-specific blocks instead of shared primitives, run the sha
 
 ## Environment Configuration
 
-Each app owns its environment schema in `.env.schema`. Varlock generates `src/env.ts` during installation; run `pnpm run env:generate` after changing a schema. Commit schemas, and keep secrets in ignored env files or your deployment platform.
+`apps/web` owns its environment schema in `.env.schema`; the backend validates its own variables in `packages/backend/convex/env.ts`. Varlock generates `src/env.ts` during installation; run `pnpm run env:generate` after changing a schema. Commit schemas, and keep secrets in ignored env files or your deployment platform.
 
 Import the generated `ENV` accessor in application code. Shared database and auth packages receive configuration or initialized clients from the application. See [Varlock's monorepo guide](https://varlock.dev/guides/monorepos/).
 
@@ -220,10 +220,12 @@ For more details, see the guide on [Deploying to Vercel](https://www.better-t-st
 ```
 saycheese/
 ├── apps/
-│   ├── web/         # Frontend application (Next.js)
+│   └── web/         # Frontend application (Next.js)
 ├── packages/
-│   ├── ui/          # Shared shadcn/ui components and styles
-│   ├── backend/     # Convex backend functions and schema
+│   ├── backend/     # Convex functions, schema and providers
+│   ├── config/      # Shared TypeScript config
+│   ├── core/        # Pure logic: errors, limits, scoring rules, validation
+│   └── ui/          # Shared shadcn/ui components, tokens and styles
 ```
 
 ## Available Scripts
@@ -232,7 +234,12 @@ saycheese/
 - `pnpm run build`: Build all applications
 - `pnpm run dev:web`: Start only the web application
 - `pnpm run dev:setup`: Setup and configure your Convex project
+- `pnpm run check`: Lint and typecheck the workspace (the release gate)
 - `pnpm run check-types`: Check TypeScript types across all apps
+- `pnpm run test`: Run every package's test suite
+- `pnpm run dev:server`: Start only the Convex backend
+- `pnpm run seed`: Seed the dev deployment with the demo account and sample images
+- `pnpm run env:generate`: Regenerate `src/env.ts` after changing an env schema
 - `pnpm run deploy:setup`: Link this repo to a Vercel project (first-time setup)
 - `pnpm run dev:vercel`: Run the Vercel Services dev environment locally
 - `pnpm run env:preview`: Sync local env files to the Vercel preview environment

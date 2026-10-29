@@ -10,3 +10,8 @@ import type { Route } from "next";
 export function signInPath(next: string): Route {
   return `/sign-in?next=${encodeURIComponent(safeNextPath(next))}` as Route;
 }
+
+/** The sign-up URL for a protected path, carrying the same `next` contract. */
+export function signUpPath(next: string): Route {
+  return `/sign-up?next=${encodeURIComponent(safeNextPath(next))}` as Route;
+}

@@ -12,7 +12,7 @@ type Test = TestConvex<typeof schema>;
 
 const consume = makeFunctionReference<
   "mutation",
-  { email: string; ip: string },
+  { email: string; ip: string | null },
   { ok: true } | { ok: false; retryAfterMs: number }
 >("internal/authRateLimit:consume");
 
@@ -48,5 +48,30 @@ it("sign-in limiter keys by IP as well as email", async () => {
     await t.mutation(consume, { email: `user${index}@example.test`, ip });
   }
   const denied = await t.mutation(consume, { email: "another@example.test", ip });
+  expect(denied.ok).toBe(false);
+});
+
+it("an unverified address shares one generous bucket instead of the strict one", async () => {
+  const t = harness();
+
+  // A direct caller (or a deployment without AUTH_PROXY_SECRET) has no trusted
+  // address. The strict per-IP bucket would then be a single global bucket, so
+  // ten attempts would lock every account out of signing in.
+  for (let index = 0; index < 12; index += 1) {
+    const result = await t.mutation(consume, {
+      email: `shared${index}@example.test`,
+      ip: null,
+    });
+    expect(result).toEqual({ ok: true });
+  }
+
+  // The per-email rule still applies to those requests.
+  for (let index = 0; index < 10; index += 1) {
+    await t.mutation(consume, { email: "target@example.test", ip: null });
+  }
+  const denied = await t.mutation(consume, {
+    email: "target@example.test",
+    ip: null,
+  });
   expect(denied.ok).toBe(false);
 });

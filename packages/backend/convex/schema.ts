@@ -35,6 +35,10 @@ export default defineSchema({
     // Set when `markReady` hands the row to the scoring pool; the stuck sweep
     // compares it against `SCORING_TIMEOUT_MS`. Missing values are ignored.
     scoringStartedAt: v.optional(v.number()),
+    // Set by the scoring action itself, before any provider work. A queued job
+    // that has not started yet keeps the enqueue timestamp above, so a busy
+    // workpool is never mistaken for a dead action.
+    scoringJobStartedAt: v.optional(v.number()),
     // Monotonic run id. Every transition into `scoring` increments it and the
     // enqueued job carries it, so a job from an older run can never settle a
     // newer one (for example after a rescore).

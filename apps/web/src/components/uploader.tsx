@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { ScorePanel } from "@/components/score-panel";
+import { signInPath } from "@/lib/auth-path";
 import { UPLOAD_COPY } from "@/lib/copy";
 import {
   formatRetryAfter,
@@ -56,6 +57,13 @@ function attemptForRetry(attempt: Attempt, error: UiError | null): Attempt {
     expiresAt: null,
   };
 }
+
+/**
+ * The storage URL refused the body. Convex upload URLs are short-lived and the
+ * client clock is not authoritative, so any refusal means "get a new URL and
+ * send the same bytes again" rather than a dead end.
+ */
+class UploadUrlExpiredError extends Error {}
 
 const HEIC_EXTENSION = /\.(heic|heif)$/i;
 
@@ -147,7 +155,7 @@ function uploadWithProgress(
     };
     xhr.onload = () => {
       if (xhr.status < 200 || xhr.status >= 300) {
-        fail(new Error(`Upload failed with status ${xhr.status}`));
+        fail(new UploadUrlExpiredError(`Upload refused with status ${xhr.status}`));
         return;
       }
 
@@ -358,6 +366,14 @@ export function Uploader() {
         attemptRef.current = null;
         return;
       }
+      if (cause instanceof UploadUrlExpiredError) {
+        // Retry from a fresh URL: `attemptForRetry` reads `expiresAt`.
+        attempt.expiresAt = 0;
+        attempt.uploadUrl = null;
+        attempt.storageId = null;
+        attempt.step = "createUpload";
+        attemptRef.current = attempt;
+      }
       const ui = toUiError(cause);
       setError(ui);
       if (ui.action === "wait") {
@@ -481,7 +497,7 @@ export function Uploader() {
       return (
         <Button
           type="button"
-          onClick={() => router.push("/sign-in?next=/app")}
+          onClick={() => router.push(signInPath("/app"))}
         >
           {UPLOAD_COPY.signIn}
         </Button>

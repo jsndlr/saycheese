@@ -16,7 +16,7 @@
     "utils": "@saycheese/ui/lib/utils",
     "ui": "@saycheese/ui/components",
     "lib": "@/lib",
-    "hooks": "@/hooks"
+    "hooks": "@/lib"
   },
   "menuColor": "default",
   "menuAccent": "subtle",

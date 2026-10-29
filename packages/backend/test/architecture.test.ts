@@ -276,6 +276,7 @@ describe("schema invariants", () => {
     "images.createdAt",
     "images.processingStartedAt",
     "images.purgedAt",
+    "images.scoringJobStartedAt",
     "images.scoringStartedAt",
     "scores.createdAt",
     "scoringAttempts.at",

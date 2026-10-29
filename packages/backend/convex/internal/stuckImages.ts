@@ -2,6 +2,7 @@ import { PROCESSING_TIMEOUT_MS, SCORING_TIMEOUT_MS } from "@saycheese/core/limit
 import { v } from "convex/values";
 
 import { internal } from "../_generated/api";
+import type { Doc } from "../_generated/dataModel";
 import { internalMutation } from "../_generated/server";
 import { env } from "../env";
 import { primaryProvider, providerOrder } from "../lib/providers";
@@ -26,6 +27,17 @@ import { recordUnavailable } from "./scoring";
 
 /** Rows failed per status per mutation; leaves headroom in the transaction. */
 export const STUCK_BATCH_SIZE = 100;
+
+/** Rows the scoring sweep may read per run while looking for expired jobs. */
+const STUCK_SCAN_LIMIT = 500;
+
+/**
+ * How long a `scoring` row may wait for a workpool slot before the sweep
+ * treats the job as lost. The action stamps `scoringJobStartedAt` when it
+ * begins; from then on `SCORING_TIMEOUT_MS` applies. This grace only covers
+ * the enqueue-to-start gap, which a backlog can stretch well past the timeout.
+ */
+const SCORING_NEVER_STARTED_GRACE_MS = SCORING_TIMEOUT_MS + 25 * 60_000;
 
 export const run = internalMutation({
   args: { batchSize: v.optional(v.number()) },
@@ -58,6 +70,27 @@ export const run = internalMutation({
       }
     }
 
+    // A `processing` row written before the start timestamp existed is not on
+    // the index above, so it would stay stuck forever. After a much longer
+    // grace it is failed the same way. `scoring` deliberately has no such
+    // fallback: the seed's demo row is a timestamp-less `scoring` row, and
+    // every real row gets a timestamp from `markReady`.
+    const legacyProcessing = (
+      await ctx.db
+        .query("images")
+        .withIndex("by_status_created", (q) =>
+          q
+            .eq("status", "processing")
+            .lt("createdAt", now - PROCESSING_TIMEOUT_MS * 4),
+        )
+        .take(limit)
+    ).filter((image) => image.processingStartedAt === undefined);
+    for (const image of legacyProcessing) {
+      if (await failImage(ctx, image._id, "IMAGE_TIMEOUT", now)) {
+        processingFailed += 1;
+      }
+    }
+
     const uploaded = await ctx.db
       .query("images")
       .withIndex("by_status_created", (q) =>
@@ -78,16 +111,39 @@ export const run = internalMutation({
     // Timestamp-less rows are excluded exactly like `processing` above: the
     // seed's demo `scoring` row has no timestamp and must survive; every row
     // `markReady` creates has one.
-    const scoringCutoff = now - SCORING_TIMEOUT_MS;
-    const scoring = await ctx.db
+    // Two different staleness rules share this index, oldest enqueue first:
+    // - a job the action started is dead once its own start is older than the
+    //   timeout;
+    // - a job that never started is not dead, only slow: a busy workpool can
+    //   hold it for minutes, so it gets a longer grace from the enqueue time.
+    // The rules cannot be expressed in the index range, so walk it in order and
+    // keep the eligible rows. Filtering after `take(limit)` would let a batch of
+    // slow-but-alive jobs hide expired ones behind it, so the scan is bounded
+    // by `STUCK_SCAN_LIMIT` rather than by the batch size.
+    const scoring: Doc<"images">[] = [];
+    const scoringQuery = ctx.db
       .query("images")
       .withIndex("by_status_scoring_started", (q) =>
         q
           .eq("status", "scoring")
           .gt("scoringStartedAt", 0)
-          .lt("scoringStartedAt", scoringCutoff),
-      )
-      .take(limit);
+          .lt("scoringStartedAt", now - SCORING_TIMEOUT_MS),
+      );
+    let scanned = 0;
+    for await (const image of scoringQuery) {
+      scanned += 1;
+      const expired =
+        image.scoringJobStartedAt !== undefined
+          ? image.scoringJobStartedAt < now - SCORING_TIMEOUT_MS
+          : (image.scoringStartedAt ?? now) <
+            now - SCORING_NEVER_STARTED_GRACE_MS;
+      if (expired) {
+        scoring.push(image);
+      }
+      if (scoring.length === limit || scanned === STUCK_SCAN_LIMIT) {
+        break;
+      }
+    }
 
     const primaryName = providerOrder(env)[0];
     let primaryModel = "unknown";
@@ -117,7 +173,8 @@ export const run = internalMutation({
     // of rows that are all too young makes no progress, and scheduling again
     // would loop forever without changing anything.
     const more =
-      (processing.length === limit && processingFailed > 0) ||
+      ((processing.length === limit || legacyProcessing.length === limit) &&
+        processingFailed > 0) ||
       (uploaded.length === limit && uploadedFailed > 0) ||
       (scoring.length === limit && scoringRecorded > 0);
     if (more) {
@@ -127,7 +184,7 @@ export const run = internalMutation({
     console.log(
       JSON.stringify({
         event: "stuckImages.run",
-        processingChecked: processing.length,
+        processingChecked: processing.length + legacyProcessing.length,
         processingFailed,
         uploadedChecked: uploaded.length,
         uploadedFailed,
@@ -138,7 +195,7 @@ export const run = internalMutation({
     );
 
     return {
-      processingChecked: processing.length,
+      processingChecked: processing.length + legacyProcessing.length,
       processingFailed,
       uploadedChecked: uploaded.length,
       uploadedFailed,

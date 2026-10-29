@@ -191,7 +191,7 @@ describe("ImageDetail archive", () => {
     },
   );
 
-  it("renders a failed archive in an alert", async () => {
+  it("treats an already archived photo as a successful archive", async () => {
     archive.mockRejectedValue(
       new ConvexError({ code: "NOT_FOUND", message: "gone" }),
     );
@@ -201,8 +201,23 @@ describe("ImageDetail archive", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
     await act(async () => {});
 
+    expect(push).toHaveBeenCalledWith("/app");
+    expect(success).toHaveBeenCalledWith(IMAGE_DETAIL_COPY.archivedToast);
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("renders a failed archive in an alert", async () => {
+    archive.mockRejectedValue(
+      new ConvexError({ code: "RATE_LIMITED", message: "slow down", retryAfterMs: 1000 }),
+    );
+    renderDetail(image());
+
+    fireEvent.click(screen.getByRole("button", { name: IMAGE_DETAIL_COPY.archive }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    await act(async () => {});
+
     expect(screen.getByRole("alert").textContent).toContain(
-      ERROR_MESSAGES.NOT_FOUND,
+      ERROR_MESSAGES.RATE_LIMITED,
     );
     expect(push).not.toHaveBeenCalled();
     expect(success).not.toHaveBeenCalled();

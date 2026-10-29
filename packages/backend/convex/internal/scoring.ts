@@ -136,6 +136,7 @@ export const tryCached = internalMutation({
       scoreId: cached._id,
       scoreCached: true,
       scoringStartedAt: undefined,
+      scoringJobStartedAt: undefined,
       quotaExceeded: undefined,
     });
     await ctx.db.insert("auditEvents", {
@@ -179,6 +180,24 @@ export const load = internalQuery({
       sha256: image.sha256,
       mime: "image/webp" as const,
     };
+  },
+});
+
+/**
+ * Stamps the moment the scoring action actually starts, before any cache or
+ * provider work. The stuck sweep uses it to tell a dead action from a job that
+ * is merely waiting in a busy workpool: only a started job can time out, and a
+ * job that never started keeps the enqueue timestamp for a longer grace.
+ */
+export const markJobStarted = internalMutation({
+  args: { imageId: v.id("images"), run: v.number() },
+  handler: async (ctx, { imageId, run }) => {
+    const image = await ctx.db.get("images", imageId);
+    if (image === null || image.status !== "scoring" || image.scoringRun !== run) {
+      return false;
+    }
+    await ctx.db.patch("images", imageId, { scoringJobStartedAt: Date.now() });
+    return true;
   },
 });
 
@@ -264,6 +283,7 @@ export const record = internalMutation({
       scoreId,
       scoreCached: linked,
       scoringStartedAt: undefined,
+      scoringJobStartedAt: undefined,
       quotaExceeded: undefined,
     });
 
@@ -358,6 +378,7 @@ export async function recordUnavailable(
     status: "scored",
     scoreId,
     scoringStartedAt: undefined,
+    scoringJobStartedAt: undefined,
   });
   await ctx.db.insert("auditEvents", {
     actorId: "system:scoring",
@@ -434,6 +455,7 @@ export const recordQuotaExceeded = internalMutation({
       scoreCached: false,
       quotaExceeded: true,
       scoringStartedAt: undefined,
+      scoringJobStartedAt: undefined,
     });
     await ctx.db.insert("auditEvents", {
       actorId: "system:scoring",

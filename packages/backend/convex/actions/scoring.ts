@@ -210,6 +210,13 @@ export const score = internalAction({
       return;
     }
 
+    // Stamp the real start before any cache or provider work: the stuck sweep
+    // must not settle a job that is still waiting for a workpool slot.
+    await ctx.runMutation(internal.internal.scoring.markJobStarted, {
+      imageId,
+      run,
+    });
+
     const order = providerOrder(env);
     const primaryName: ProviderName = order[0];
     if (force !== true) {

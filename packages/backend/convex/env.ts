@@ -10,6 +10,19 @@ const envSchema = z
     // sign-in is keyed under the shared `direct` bucket (safe default).
     AUTH_PROXY_SECRET: z.string().min(32).optional(),
     SITE_URL: z.url({ protocol: /^https?$/ }),
+    // Extra origins allowed to sign in, beyond SITE_URL: preview deployments
+    // and any additional hostname the app is served from. Comma-separated.
+    TRUSTED_ORIGINS: z
+      .string()
+      .optional()
+      .transform((value) =>
+        value === undefined
+          ? undefined
+          : value
+              .split(",")
+              .map((origin) => origin.trim())
+              .filter((origin) => origin.length > 0),
+      ),
     SMILE_PROVIDER: providerSchema.default("stub"),
     SMILE_DAILY_QUOTA: z.coerce.number().int().positive().default(100),
     SCORING_CONFIG_VERSION: z.string().default("1"),

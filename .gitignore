@@ -47,6 +47,9 @@ lerna-debug.log*
 .alchemy
 .vercel
 
+# Design tooling scratch state (the committed brief lives in DESIGN.md)
+apps/web/.impeccable/questions
+
 # Testing
 coverage
 .nyc_output

@@ -480,7 +480,7 @@ describe("Vision images:annotate request", () => {
     expect(transport.tokenRequests()).toBe(1);
   });
 
-  it("treats token exchange failures as fatal", async () => {
+  it("treats a rejected credential as a fatal token exchange failure", async () => {
     vi.stubGlobal(
       "fetch",
       async () => new Response(JSON.stringify({ error: "invalid_grant" }), { status: 401 }),
@@ -488,6 +488,20 @@ describe("Vision images:annotate request", () => {
 
     await expect(createVisionProvider(credentials()).score(input())).rejects.toMatchObject({
       kind: "fatal",
+      code: "token_exchange_failed",
+    });
+  });
+
+  it("retries a transient token endpoint failure instead of failing the run", async () => {
+    vi.stubGlobal(
+      "fetch",
+      async () => new Response(JSON.stringify({ error: "backend" }), { status: 503 }),
+    );
+
+    // A Google outage must not settle the image as unavailable: the retry
+    // budget and the configured fallback still get a turn.
+    await expect(createVisionProvider(credentials()).score(input())).rejects.toMatchObject({
+      kind: "retryable",
       code: "token_exchange_failed",
     });
   });

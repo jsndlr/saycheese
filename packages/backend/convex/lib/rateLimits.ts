@@ -29,13 +29,19 @@ import { fail } from "../functions";
  */
 export const rateLimiter = new RateLimiter(components.rateLimiter);
 
-export type LimitName = "signIn" | "upload" | "uploadUrl" | "rescore";
+export type LimitName = "signIn" | "signInShared" | "upload" | "uploadUrl" | "rescore";
 
 export const LIMITS = {
   signIn: {
     kind: "fixed window",
     rate: RATE_LIMITS.signIn.limit,
     period: RATE_LIMITS.signIn.windowMs,
+    start: 0,
+  },
+  signInShared: {
+    kind: "fixed window",
+    rate: RATE_LIMITS.signInShared.limit,
+    period: RATE_LIMITS.signInShared.windowMs,
     start: 0,
   },
   upload: {
@@ -114,20 +120,31 @@ export async function consumeDailyScore(
  * Sign-in attempts count against both the normalised email and the client IP.
  * Two keys mean a single IP cannot spread attempts across many emails, and one
  * email cannot be attacked from many IPs. Both are consumed in one mutation.
+ *
+ * `ip` is `null` when the address could not be trusted (no proxy secret, or a
+ * caller that bypassed the proxy). That request still counts against the
+ * shared bucket, which is generous on purpose: a strict per-IP rule keyed on a
+ * constant would let one attacker lock every account out.
  */
 export async function consumeSignIn(
   ctx: MutationCtx,
   email: string,
-  ip: string,
+  ip: string | null,
 ): Promise<{ ok: true } | { ok: false; retryAfterMs: number }> {
   const emailStatus = await rateLimiter.limit(ctx, "signIn", {
     key: `email:${email}`,
     config: LIMITS.signIn,
   });
-  const ipStatus = await rateLimiter.limit(ctx, "signIn", {
-    key: `ip:${ip}`,
-    config: LIMITS.signIn,
-  });
+  const ipStatus =
+    ip === null
+      ? await rateLimiter.limit(ctx, "signInShared", {
+          key: "shared",
+          config: LIMITS.signInShared,
+        })
+      : await rateLimiter.limit(ctx, "signIn", {
+          key: `ip:${ip}`,
+          config: LIMITS.signIn,
+        });
   if (emailStatus.ok && ipStatus.ok) {
     return { ok: true };
   }

@@ -12,6 +12,7 @@ import { toast } from "sonner";
 
 import { FormField } from "@/components/form-field";
 import { authClient } from "@/lib/auth-client";
+import { signUpPath } from "@/lib/auth-path";
 import { parseSignInInput } from "@/lib/auth-input";
 import { toUiError } from "@/lib/errors";
 import { firstFieldError } from "@/lib/form-error";
@@ -137,7 +138,7 @@ export default function SignInForm({ nextPath }: { nextPath: string }) {
 
       <div className="mt-6 text-center text-sm text-muted-foreground">
         Need an account?{" "}
-        <Link href="/sign-up" className="font-semibold text-primary-text underline-offset-4 hover:underline">
+        <Link href={signUpPath(nextPath)} className="font-semibold text-primary-text underline-offset-4 hover:underline">
           Sign up
         </Link>
       </div>

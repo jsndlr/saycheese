@@ -68,6 +68,7 @@ export const markReady = internalMutation({
       // production transition produces it any more.
       status: "scoring",
       scoringStartedAt: Date.now(),
+      scoringJobStartedAt: undefined,
       scoringRun: run,
       storageId: args.storageId,
       previewId: args.previewId,
