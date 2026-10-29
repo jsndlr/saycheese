@@ -34,8 +34,9 @@ import { unavailableResult } from "./internal/scoring";
  * share the same 10 s budget. A failing attempt holds its workpool slot while
  * it waits, which is intended: four provider calls at a time, retries included.
  *
- * No cache (task 3), no fallback provider (task 5), no per-user rate limit
- * (task 6).
+ * No fallback provider (task 5), no per-user rate limit (task 6). The content
+ * cache (task 3) is consulted in `tryCached`, a mutation, before any pixels or
+ * provider are touched; a hit ends the run.
  */
 
 type ProviderCall =
@@ -152,7 +153,6 @@ function toScoreResult(
       : {
           provider: provider.name,
           providerModel: provider.model,
-          // TODO(task 3): read/write the score cache here.
           cached: false,
         },
   );
@@ -184,6 +184,16 @@ export const score = internalAction({
     }
 
     const primaryName: ProviderName = providerOrder(env)[0];
+    const cached = await ctx.runMutation(internal.internal.scoring.tryCached, {
+      imageId,
+      provider: primaryName,
+      configVersion: env.SCORING_CONFIG_VERSION,
+    });
+    if (cached) {
+      log("image.scoring.cached", { imageId, provider: primaryName });
+      return;
+    }
+
     let provider: SmileProvider | null = null;
     try {
       provider = primaryProvider(env);

@@ -208,9 +208,13 @@ export const commit = internalMutation({
           providerModel: "stub-v1",
           configVersion: env.SCORING_CONFIG_VERSION,
           latencyMs: image.score.latencyMs,
+          cacheable: image.score.status !== "unavailable",
           createdAt: image.createdAt + image.score.latencyMs,
         });
-        await ctx.db.patch("images", imageId, { scoreId });
+        await ctx.db.patch("images", imageId, {
+          scoreId,
+          scoreCached: false,
+        });
       }
 
       for (const storageId of storageIdsOf(image)) {

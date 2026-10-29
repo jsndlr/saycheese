@@ -5,6 +5,8 @@ import { makeFunctionReference } from "convex/server";
 import { expect, it, vi } from "vitest";
 
 import schema from "../convex/schema";
+import { stubProvider } from "../convex/lib/providers/stub";
+import { toImageDto } from "../convex/model/images";
 import type { Doc, Id } from "../convex/_generated/dataModel";
 
 /**
@@ -52,7 +54,14 @@ const record = makeFunctionReference<
   boolean
 >("internal/scoring:record");
 
+const tryCached = makeFunctionReference<
+  "mutation",
+  { imageId: Id<"images">; provider: "stub"; configVersion: string },
+  boolean
+>("internal/scoring:tryCached");
+
 const SUCCESS_SHA = `61${"0".repeat(62)}`;
+const UNAVAILABLE_SHA = `fa11face03${"0".repeat(54)}`;
 const RETRYABLE_SHA = `fa11face00${"0".repeat(54)}`;
 const FATAL_SHA = `fa11face01${"0".repeat(54)}`;
 // 0x00c8 = 200 ms, well above the mocked 40 ms call timeout.
@@ -62,13 +71,14 @@ async function insertScoringImage(
   t: Test,
   sha256: string,
   status: Doc<"images">["status"] = "scoring",
+  userId = "user-1",
 ) {
   return t.run(async (ctx) => {
     const storageId = await ctx.storage.store(
       new Blob([new Uint8Array([1, 2, 3])], { type: "image/webp" }),
     );
     const imageId = await ctx.db.insert("images", {
-      userId: "user-1",
+      userId,
       sha256,
       storageId,
       mime: "image/jpeg",
@@ -290,4 +300,268 @@ it("T-SCR-11 record on a row that is not scoring writes nothing", async () => {
   expect(after.scores).toHaveLength(before.scores.length);
   expect(after.attempts).toHaveLength(0);
   expect(after.audits).toHaveLength(0);
+});
+
+it("T-SCR-12 a second image with the same sha links the cached score without a provider call", async () => {
+  const t = convexTest(schema, modules);
+  const first = await insertScoringImage(t, SUCCESS_SHA, "scoring", "user-1");
+  const second = await insertScoringImage(t, SUCCESS_SHA, "scoring", "user-2");
+
+  const spy = vi.spyOn(stubProvider, "score");
+  try {
+    await t.action(score, { imageId: first.imageId });
+    expect(spy).toHaveBeenCalledTimes(1);
+    await t.action(score, { imageId: second.imageId });
+    // The cache hit stopped the action before the provider was reached.
+    expect(spy).toHaveBeenCalledTimes(1);
+  } finally {
+    spy.mockRestore();
+  }
+
+  const { scores, attempts, audits } = await t.run(async (ctx) => ({
+    scores: await ctx.db.query("scores").collect(),
+    attempts: await ctx.db.query("scoringAttempts").collect(),
+    audits: await ctx.db.query("auditEvents").collect(),
+  }));
+  expect(scores).toHaveLength(1);
+
+  const [firstImage, secondImage] = await t.run((ctx) =>
+    Promise.all([
+      ctx.db.get("images", first.imageId),
+      ctx.db.get("images", second.imageId),
+    ]),
+  );
+  expect(firstImage).toMatchObject({ status: "scored", scoreCached: false });
+  expect(secondImage).toMatchObject({ status: "scored", scoreCached: true });
+  expect(secondImage?.scoreId).toBe(firstImage?.scoreId);
+  expect(attempts.map((attempt) => attempt.imageId)).toEqual([first.imageId]);
+  expect(
+    audits
+      .filter((audit) => audit.action === "score.record")
+      .map((audit) => audit.after?.cached),
+  ).toEqual([false, true]);
+
+  const dtoFor = (imageId: Id<"images">) =>
+    t.run(async (ctx) => {
+      const image = await ctx.db.get("images", imageId);
+      if (image === null) throw new Error(`missing image ${imageId}`);
+      return toImageDto(ctx, image);
+    });
+  expect((await dtoFor(first.imageId)).score?.cached).toBe(false);
+  expect((await dtoFor(second.imageId)).score?.cached).toBe(true);
+});
+
+it("T-SCR-12 a config version bump misses the cache", async () => {
+  const t = convexTest(schema, modules);
+  const first = await insertScoringImage(t, SUCCESS_SHA, "scoring", "user-1");
+  const second = await insertScoringImage(t, SUCCESS_SHA, "scoring", "user-2");
+
+  await t.action(score, { imageId: first.imageId });
+
+  const bumped = await t.mutation(tryCached, {
+    imageId: second.imageId,
+    provider: "stub",
+    configVersion: "2",
+  });
+  expect(bumped).toBe(false);
+  expect(await t.run((ctx) => ctx.db.get("images", second.imageId))).toMatchObject(
+    { status: "scoring" },
+  );
+
+  // The same key with the current version still hits.
+  const hit = await t.mutation(tryCached, {
+    imageId: second.imageId,
+    provider: "stub",
+    configVersion: "1",
+  });
+  expect(hit).toBe(true);
+});
+
+it("T-SCR-12 an unavailable row is never served from the cache", async () => {
+  const t = convexTest(schema, modules);
+  const first = await insertScoringImage(t, UNAVAILABLE_SHA, "scoring", "user-1");
+  const second = await insertScoringImage(t, UNAVAILABLE_SHA, "scoring", "user-2");
+
+  const spy = vi.spyOn(stubProvider, "score");
+  try {
+    await t.action(score, { imageId: first.imageId });
+    await t.action(score, { imageId: second.imageId });
+    expect(spy).toHaveBeenCalledTimes(2);
+  } finally {
+    spy.mockRestore();
+  }
+
+  const { scores } = await t.run(async (ctx) => ({
+    scores: await ctx.db.query("scores").collect(),
+  }));
+  expect(scores).toHaveLength(2);
+  expect(scores.every((score) => score.status === "unavailable")).toBe(true);
+
+  const [firstImage, secondImage] = await t.run((ctx) =>
+    Promise.all([
+      ctx.db.get("images", first.imageId),
+      ctx.db.get("images", second.imageId),
+    ]),
+  );
+  expect(firstImage?.scoreId).toBeDefined();
+  expect(secondImage?.scoreId).toBeDefined();
+  expect(secondImage?.scoreId).not.toBe(firstImage?.scoreId);
+  expect(secondImage?.scoreCached).toBe(false);
+});
+
+it("T-SCR-12 concurrent misses link the second record to the first row", async () => {
+  const t = convexTest(schema, modules);
+  const first = await insertScoringImage(t, SUCCESS_SHA, "scoring", "user-1");
+  const second = await insertScoringImage(t, SUCCESS_SHA, "scoring", "user-2");
+
+  const result = {
+    score: 42,
+    confidence: 0.9,
+    faceCount: 1,
+    status: "scored",
+    reason: "Scored",
+    provider: "stub",
+    providerModel: "stub-v1",
+    configVersion: "1",
+    latencyMs: 1,
+    costMicros: 0,
+  };
+  const attempt = {
+    provider: "stub",
+    outcome: "success",
+    latencyMs: 1,
+    at: 1,
+  };
+
+  await t.mutation(record, { imageId: first.imageId, result, attempts: [attempt] });
+  await t.mutation(record, {
+    imageId: second.imageId,
+    result: { ...result, score: 43 },
+    attempts: [attempt],
+  });
+
+  const { scores, attempts } = await t.run(async (ctx) => ({
+    scores: await ctx.db.query("scores").collect(),
+    attempts: await ctx.db.query("scoringAttempts").collect(),
+  }));
+  expect(scores).toHaveLength(1);
+  expect(scores[0]?.score).toBe(42);
+
+  const [firstImage, secondImage] = await t.run((ctx) =>
+    Promise.all([
+      ctx.db.get("images", first.imageId),
+      ctx.db.get("images", second.imageId),
+    ]),
+  );
+  expect(secondImage?.scoreId).toBe(firstImage?.scoreId);
+  expect(firstImage?.scoreCached).toBe(false);
+  expect(secondImage?.scoreCached).toBe(true);
+  expect(attempts).toHaveLength(2);
+});
+
+it("T-SCR-12 the cache lookup ignores unbounded outage history under the key", async () => {
+  const t = convexTest(schema, modules);
+  const image = await insertScoringImage(t, SUCCESS_SHA, "scoring", "user-2");
+
+  const cacheableId = await t.run(async (ctx) => {
+    const base = {
+      sha256: SUCCESS_SHA,
+      score: 42,
+      confidence: 0.9,
+      faceCount: 1,
+      reason: "Scored",
+      provider: "stub" as const,
+      providerModel: "stub-v1",
+      configVersion: "1",
+      latencyMs: 1,
+      createdAt: 1,
+    };
+    // 50 outage rows share the key; only the cacheable row is visible through
+    // `by_cache_entry` with `cacheable: true`, so the lookup reads at most one
+    // document regardless of how many outages accumulated.
+    for (let index = 0; index < 50; index += 1) {
+      await ctx.db.insert("scores", {
+        ...base,
+        status: "unavailable",
+        score: null,
+        confidence: null,
+        faceCount: 0,
+        reason: "Scoring is unavailable",
+        cacheable: false,
+        createdAt: 2 + index,
+      });
+    }
+    return ctx.db.insert("scores", {
+      ...base,
+      status: "scored",
+      cacheable: true,
+    });
+  });
+
+  const hit = await t.mutation(tryCached, {
+    imageId: image.imageId,
+    provider: "stub",
+    configVersion: "1",
+  });
+  expect(hit).toBe(true);
+  expect(await t.run((ctx) => ctx.db.get("images", image.imageId))).toMatchObject({
+    status: "scored",
+    scoreId: cacheableId,
+    scoreCached: true,
+  });
+});
+
+it("T-SCR-12 a concurrent link audits the linked row's status", async () => {
+  const t = convexTest(schema, modules);
+  const first = await insertScoringImage(t, SUCCESS_SHA, "scoring", "user-1");
+  const second = await insertScoringImage(t, SUCCESS_SHA, "scoring", "user-2");
+
+  const result = {
+    score: 42,
+    confidence: 0.9,
+    faceCount: 1,
+    status: "scored",
+    reason: "Scored",
+    provider: "stub",
+    providerModel: "stub-v1",
+    configVersion: "1",
+    latencyMs: 1,
+    costMicros: 0,
+  };
+  const attempt = {
+    provider: "stub",
+    outcome: "success",
+    latencyMs: 1,
+    at: 1,
+  };
+
+  await t.mutation(record, {
+    imageId: first.imageId,
+    result,
+    attempts: [attempt],
+  });
+  // This run's discarded result says `multiple_faces`; the image gets the
+  // existing `scored` row, and the audit must say so.
+  await t.mutation(record, {
+    imageId: second.imageId,
+    result: { ...result, status: "multiple_faces", reason: "Scored 2 faces" },
+    attempts: [attempt],
+  });
+
+  const [secondImage, audits] = await t.run((ctx) =>
+    Promise.all([
+      ctx.db.get("images", second.imageId),
+      ctx.db.query("auditEvents").collect(),
+    ]),
+  );
+  expect(secondImage?.scoreCached).toBe(true);
+  const secondAudit = audits.find((audit) => audit.docId === second.imageId);
+  expect(secondAudit).toMatchObject({
+    action: "score.record",
+    after: {
+      scoreId: secondImage?.scoreId,
+      scoreStatus: "scored",
+      cached: true,
+    },
+  });
 });

@@ -37,6 +37,9 @@ export default defineSchema({
     scoringStartedAt: v.optional(v.number()),
     failureCode: v.optional(errorCode),
     scoreId: v.optional(v.id("scores")),
+    // True when `scoreId` was linked from the content cache instead of a
+    // provider run. Per image, never per score: the score row is shared.
+    scoreCached: v.optional(v.boolean()),
     createdAt: v.number(),
     archivedAt: v.optional(v.number()),
   })
@@ -65,9 +68,14 @@ export default defineSchema({
     latencyMs: v.number(),
     costMicros: v.optional(v.number()),
     detail: v.optional(jsonRecord),
+    // True for image-describing outcomes (see `CACHEABLE` in
+    // internal/scoring.ts); false for `unavailable`. Part of the cache index so
+    // the lookup reads at most the one cacheable row and never scans outage
+    // history.
+    cacheable: v.boolean(),
     createdAt: v.number(),
   })
-    .index("by_cache", ["sha256", "provider", "configVersion"])
+    .index("by_cache_entry", ["sha256", "provider", "configVersion", "cacheable"])
     .index("by_sha", ["sha256"]),
 
   scoringAttempts: defineTable({

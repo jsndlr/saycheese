@@ -312,6 +312,7 @@ it("never leaks storage ids, ownership or provider internals in DTOs", async () 
       latencyMs: 12,
       costMicros: 99,
       detail: { secret: "provider payload" },
+      cacheable: true,
       createdAt: 1,
     });
     return ctx.db.insert("images", {
@@ -488,6 +489,7 @@ it("joins the score row into the DTO and returns null without one", async () => 
       providerModel: "vision-1",
       configVersion: "v2",
       latencyMs: 41,
+      cacheable: true,
       createdAt: 10,
     });
     return ctx.db.insert("images", {

@@ -43,6 +43,7 @@ const validScore = {
   providerModel: "stub-1",
   configVersion: "scoring-v1",
   latencyMs: 12,
+  cacheable: true,
   createdAt: 1_700_000_000_000,
 } as const;
 

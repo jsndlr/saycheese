@@ -55,6 +55,101 @@ export type ScoreResult = {
 };
 
 /**
+ * Statuses that describe the image, not the run: only these may be served to
+ * another image from the content cache. `unavailable` reflects an outage (or a
+ * provider error result) at one point in time, so every image gets its own row.
+ */
+const CACHEABLE: Readonly<Record<ScoreStatus, boolean>> = {
+  scored: true,
+  no_face: true,
+  multiple_faces: true,
+  low_quality: true,
+  unavailable: false,
+};
+
+export function isCacheableStatus(status: ScoreStatus): boolean {
+  return CACHEABLE[status];
+}
+
+/**
+ * Finds the cacheable score for a content key, if any, using the bounded
+ * `by_cache_entry` index: the `cacheable: true` suffix means the lookup reads
+ * at most the single cacheable row per key (the `record` guard prevents a
+ * second), never the `unavailable` outage rows that share the key.
+ */
+export async function cachedScore(
+  db: MutationCtx["db"],
+  key: { sha256: string; provider: ProviderName; configVersion: string },
+) {
+  return await db
+    .query("scores")
+    .withIndex("by_cache_entry", (q) =>
+      q
+        .eq("sha256", key.sha256)
+        .eq("provider", key.provider)
+        .eq("configVersion", key.configVersion)
+        .eq("cacheable", true),
+    )
+    .first();
+}
+
+/**
+ * Cache lookup, called by the action before it reads pixels or constructs a
+ * provider. It is a mutation so the read and the link commit atomically: a
+ * query followed by a separate patch could link a row another run was about
+ * to replace (e.g. the stuck sweep).
+ *
+ * Returns true when the image was linked to an existing score row; the action
+ * then stops without calling a provider. `unavailable` rows are ignored by
+ * `cachedScore`, even though they share the key.
+ */
+export const tryCached = internalMutation({
+  args: {
+    imageId: v.id("images"),
+    provider,
+    configVersion: v.string(),
+  },
+  handler: async (ctx, { imageId, provider: providerName, configVersion }) => {
+    const image = await ctx.db.get("images", imageId);
+    if (image === null || image.status !== "scoring") {
+      return false;
+    }
+
+    const cached = await cachedScore(ctx.db, {
+      sha256: image.sha256,
+      provider: providerName,
+      configVersion,
+    });
+    if (cached === null) {
+      return false;
+    }
+
+    const now = Date.now();
+    await ctx.db.patch("images", imageId, {
+      status: "scored",
+      scoreId: cached._id,
+      scoreCached: true,
+      scoringStartedAt: undefined,
+    });
+    await ctx.db.insert("auditEvents", {
+      actorId: "system:scoring",
+      action: "score.record",
+      table: "images",
+      docId: imageId,
+      before: { status: "scoring" },
+      after: {
+        status: "scored",
+        scoreId: cached._id,
+        scoreStatus: cached.status,
+        cached: true,
+      },
+      at: now,
+    });
+    return true;
+  },
+});
+
+/**
  * What an enqueued score action needs. `mime` is always `image/webp`: scoring
  * reads the re-encoded `original` variant, never the raw upload. `null` means
  * the row is no longer `scoring` (or has no variant to read), so the action is
@@ -100,20 +195,35 @@ export const record = internalMutation({
     }
 
     const now = Date.now();
-    const scoreId = await ctx.db.insert("scores", {
-      sha256: image.sha256,
-      score: result.score,
-      confidence: result.confidence,
-      faceCount: result.faceCount,
-      status: result.status,
-      reason: result.reason,
-      provider: result.provider,
-      providerModel: result.providerModel,
-      configVersion: result.configVersion,
-      latencyMs: result.latencyMs,
-      costMicros: result.costMicros,
-      createdAt: now,
-    });
+    // Concurrent-miss guard: two actions can both miss `tryCached`, call the
+    // provider, and arrive here. The first inserts the cacheable row; the
+    // second links to it instead of creating a second cache entry for the same
+    // key. `unavailable` is never cached, so each outage keeps its own row.
+    const cached = isCacheableStatus(result.status)
+      ? await cachedScore(ctx.db, {
+          sha256: image.sha256,
+          provider: result.provider,
+          configVersion: result.configVersion,
+        })
+      : null;
+    const linked = cached !== null;
+    const scoreId =
+      cached?._id ??
+      (await ctx.db.insert("scores", {
+        sha256: image.sha256,
+        score: result.score,
+        confidence: result.confidence,
+        faceCount: result.faceCount,
+        status: result.status,
+        reason: result.reason,
+        provider: result.provider,
+        providerModel: result.providerModel,
+        configVersion: result.configVersion,
+        latencyMs: result.latencyMs,
+        costMicros: result.costMicros,
+        cacheable: isCacheableStatus(result.status),
+        createdAt: now,
+      }));
 
     for (const attempt of attempts) {
       await ctx.db.insert("scoringAttempts", {
@@ -129,6 +239,7 @@ export const record = internalMutation({
     await ctx.db.patch("images", imageId, {
       status: "scored",
       scoreId,
+      scoreCached: linked,
       scoringStartedAt: undefined,
     });
 
@@ -138,7 +249,14 @@ export const record = internalMutation({
       table: "images",
       docId: imageId,
       before: { status: "scoring" },
-      after: { status: "scored", scoreId, scoreStatus: result.status },
+      after: {
+        status: "scored",
+        scoreId,
+        // On a concurrent-miss link, describe what the image actually got:
+        // the existing row, not this run's discarded result.
+        scoreStatus: cached?.status ?? result.status,
+        cached: linked,
+      },
       at: now,
     });
 
@@ -208,6 +326,7 @@ export async function recordUnavailable(
     configVersion: result.configVersion,
     latencyMs: result.latencyMs,
     costMicros: result.costMicros,
+    cacheable: false,
     createdAt: options.at,
   });
   await ctx.db.patch("images", imageId, {

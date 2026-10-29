@@ -18,6 +18,9 @@ export type ImageScoreDto = {
   reason: string;
   provider: Doc<"scores">["provider"];
   createdAt: number;
+  // Per image, not per score: the linked score row is shared by every image
+  // with the same `(sha256, provider, configVersion)`.
+  cached: boolean;
 };
 
 export type ImageDto = {
@@ -85,6 +88,7 @@ export async function toImageDto(
             reason: score.reason,
             provider: score.provider,
             createdAt: score.createdAt,
+            cached: image.scoreCached ?? false,
           },
   };
 }
