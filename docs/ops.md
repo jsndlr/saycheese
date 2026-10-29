@@ -101,12 +101,13 @@ so running functions pick it up, and verify `/health` plus one sign-in.
 
 ## Dependency audit (2026-10-29)
 
-`pnpm audit --prod` reported 13 advisories. After upgrading Vitest to 4.1.12, Better Auth to 1.6.33 and `@convex-dev/better-auth` to 0.12.6, it reports 7: 1 critical, 2 high and 4 low. This is not a clean audit.
+`pnpm audit --prod` reported 13 advisories. After upgrading Vitest to 4.1.12, Better Auth to 1.6.33 and `@convex-dev/better-auth` to 0.12.6, and moving `shadcn` (a build-time CSS import and CLI) to `devDependencies`, it reports 6, all in Better Auth: 1 critical, 2 high and 3 low. This is not a clean audit.
 
 - Fixed: the Vitest, `@vitest/mocker` and tinypool advisories (Vitest 4 no longer uses tinypool), and the Better Auth device-login advisory patched in 1.6.22.
 - Open: Better Auth GHSA-965c-763c-88jm (critical, OAuth state used as a magic link), GHSA-r4xp-prcw-77qf (high, OAuth proxy) and GHSA-q84f-53jg-9ppm (high, device login approval) are patched only in 1.7.x. GHSA-44jh-23m7-hpcf (low) concerns the Drizzle and Kysely adapters on PostgreSQL. saycheese enables email/password and the Convex plugin only, with no OAuth, OAuth proxy, magic-link or device plugins and the Convex database adapter. That narrows the exposure but is not proof of safety.
-- Blocker: the latest `@convex-dev/better-auth` (0.12.6) declares `better-auth >=1.6.11 <1.7.0`. Do not force 1.7.x into production; upgrade when an adapter release supports it.
+- Blocker: the latest `@convex-dev/better-auth` (0.12.6) declares `better-auth >=1.6.11 <1.7.0`. Tried 1.7.14 on 2026-10-29: it typechecks, but Convex cannot bundle the backend because the adapter imports `better-auth/plugins/oidc-provider`, which 1.7 no longer exports, and no standalone package replaces it. Do not force 1.7.x; upgrade when an adapter release supports it.
+- Exposure: the adapter's Convex plugin only checks the `/magic-link/verify` path in its hooks and registers none of the vulnerable plugins; its `auth-options` helper that does list them is not imported by saycheese.
 - Better Auth 1.6.18 and later collapse `useSession().data` to `never` in the adapter's `AuthClient` type ([get-convex/better-auth#420](https://github.com/get-convex/better-auth/issues/420)). `providers.tsx` casts the client to `AuthClient`; remove the cast once the adapter fixes the type.
-- Deepmerge (low) comes from the UI package's shadcn dependency, which `globals.css` imports for its Tailwind styles; the advisory lists no patched version. Avoid merging untrusted objects.
+- Deepmerge (low) came from `shadcn`, which has no patched version. `shadcn` is now a dev dependency, so `deepmerge` is out of the production graph.
 
 Re-run the audit after dependency changes. Advisory counts are time-sensitive.
