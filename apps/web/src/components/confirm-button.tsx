@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@saycheese/ui/components/button";
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { CONFIRM_COPY } from "@/lib/copy";
 
@@ -9,6 +9,10 @@ import { CONFIRM_COPY } from "@/lib/copy";
  * A destructive-ish action behind an inline confirmation step. Deliberately
  * not `window.confirm`: the question stays in the page, is reachable by screen
  * readers and does not block the event loop.
+ *
+ * Opening the question moves focus to Confirm, because the trigger unmounts
+ * and the browser would otherwise drop focus to `body`; cancelling returns it
+ * to the trigger. A keyboard user is never sent back to the top of the page.
  *
  * `disabled` also renders `disabledReason` (for example "Wait until scoring
  * finishes"), so a caller cannot show a dead button without explaining it.
@@ -36,7 +40,22 @@ export function ConfirmButton({
 }) {
   const questionId = useId();
   const [confirming, setConfirming] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const confirmRef = useRef<HTMLButtonElement>(null);
+  const returnFocus = useRef(false);
   const blocked = disabled || pending;
+
+  useEffect(() => {
+    if (confirming) {
+      returnFocus.current = true;
+      confirmRef.current?.focus();
+      return;
+    }
+    if (returnFocus.current) {
+      returnFocus.current = false;
+      triggerRef.current?.focus();
+    }
+  }, [confirming]);
 
   if (blocked) {
     return (
@@ -62,6 +81,7 @@ export function ConfirmButton({
   if (!confirming) {
     return (
       <Button
+        ref={triggerRef}
         type="button"
         variant={variant}
         size={size}
@@ -79,6 +99,7 @@ export function ConfirmButton({
       </p>
       <div className="flex flex-wrap gap-2">
         <Button
+          ref={confirmRef}
           type="button"
           variant={variant}
           size={size}

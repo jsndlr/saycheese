@@ -36,6 +36,6 @@
     "@types/react-dom": "catalog:",
     "tailwindcss": "catalog:",
     "typescript": "catalog:",
-    "vitest": "^3.2.7"
+    "vitest": "^4.1.12"
   }
 }

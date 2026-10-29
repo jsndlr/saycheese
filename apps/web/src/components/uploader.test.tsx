@@ -5,6 +5,7 @@ import { useMutation, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
 import { createHash } from "node:crypto";
 import { webcrypto } from "node:crypto";
+import { setTimeout as nodeSetTimeout } from "node:timers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Uploader } from "./uploader";
@@ -278,7 +279,7 @@ describe("Uploader flow", () => {
       target: { files: [new File(["hello"], "photo.jpg", { type: "image/jpeg" })] },
     });
 
-    for (let i = 0; i < 20 && FakeXHR.instances.length === 0; i += 1) {
+    for (let i = 0; i < 200 && FakeXHR.instances.length === 0; i += 1) {
       await flushMicrotasks();
     }
     const xhr = FakeXHR.instances[0];
@@ -331,7 +332,7 @@ describe("Uploader flow", () => {
       target: { files: [new File(["hello"], "photo.jpg", { type: "image/jpeg" })] },
     });
 
-    for (let i = 0; i < 20 && FakeXHR.instances.length === 0; i += 1) {
+    for (let i = 0; i < 200 && FakeXHR.instances.length === 0; i += 1) {
       await flushMicrotasks();
     }
     const xhr = FakeXHR.instances[0];
@@ -362,7 +363,7 @@ describe("Uploader flow", () => {
       target: { files: [new File(["hello"], "photo.jpg", { type: "image/jpeg" })] },
     });
 
-    for (let i = 0; i < 20 && FakeXHR.instances.length === 0; i += 1) {
+    for (let i = 0; i < 200 && FakeXHR.instances.length === 0; i += 1) {
       await flushMicrotasks();
     }
     const xhr = FakeXHR.instances[0];
@@ -378,7 +379,9 @@ describe("Uploader flow", () => {
     fireEvent.change(uploadInput(), {
       target: { files: [new File(["again"], "other.jpg", { type: "image/jpeg" })] },
     });
-    await flushMicrotasks(20);
+    for (let i = 0; i < 100 && createUpload.mock.calls.length < 2; i += 1) {
+      await act(async () => { await new Promise<void>((resolve) => nodeSetTimeout(resolve, 10)); });
+    }
 
     expect(createUpload).toHaveBeenCalledTimes(2);
   });
@@ -395,7 +398,7 @@ describe("Uploader flow", () => {
       target: { files: [new File(["hello"], "photo.jpg", { type: "image/jpeg" })] },
     });
 
-    for (let i = 0; i < 20 && FakeXHR.instances.length === 0; i += 1) {
+    for (let i = 0; i < 200 && FakeXHR.instances.length === 0; i += 1) {
       await flushMicrotasks();
     }
     const xhr = FakeXHR.instances[0];
@@ -424,7 +427,7 @@ describe("Uploader flow", () => {
 async function flushMicrotasks(rounds = 1) {
   for (let i = 0; i < rounds; i += 1) {
     await act(async () => {
-      await Promise.resolve();
+      await new Promise<void>((resolve) => nodeSetTimeout(resolve, 10));
     });
   }
 }

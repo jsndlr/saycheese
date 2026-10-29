@@ -186,7 +186,8 @@ async function processClaimed(
     }),
   );
 
-  // TODO(Phase 3): enqueue scoring
+  // Scoring is enqueued by `markReady` in the same transaction that
+  // flips the row to `scoring`; there is nothing left to schedule here.
 }
 
 export const process = internalAction({

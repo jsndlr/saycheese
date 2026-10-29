@@ -126,8 +126,10 @@ describe("forwardAuthRequest with a real NextRequest", () => {
     expect(await response.text()).toBe(
       JSON.stringify({ email: "next@b.test", password: "wrong-password" }),
     );
-    expect(forwarded).toBeInstanceOf(Request);
-    expect(forwarded).not.toBeInstanceOf(NextRequest);
+    // Request's static Symbol.hasInstance is inherited by NextRequest, so `instanceof`
+    // cannot tell them apart; the prototype can.
+    expect(Object.getPrototypeOf(incoming)).toBe(NextRequest.prototype);
+    expect(Object.getPrototypeOf(forwarded)).toBe(Request.prototype);
     expect(forwarded?.headers.get("x-saycheese-client-ip")).toBeNull();
     expect(forwarded?.headers.get("x-saycheese-proxy-secret")).toBe(SECRET);
     // The failure mode was reading these on a cross-realm object; touching the
