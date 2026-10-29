@@ -101,13 +101,22 @@ so running functions pick it up, and verify `/health` plus one sign-in.
 
 ## Dependency audit (2026-10-29)
 
-`pnpm audit --prod` reported 13 advisories. After upgrading Vitest to 4.1.12, Better Auth to 1.6.33 and `@convex-dev/better-auth` to 0.12.6, and moving `shadcn` (a build-time CSS import and CLI) to `devDependencies`, it reports 6, all in Better Auth: 1 critical, 2 high and 3 low. This is not a clean audit.
+`pnpm audit --prod` reported 13 advisories and now reports none. The fixes:
 
-- Fixed: the Vitest, `@vitest/mocker` and tinypool advisories (Vitest 4 no longer uses tinypool), and the Better Auth device-login advisory patched in 1.6.22.
-- Open: Better Auth GHSA-965c-763c-88jm (critical, OAuth state used as a magic link), GHSA-r4xp-prcw-77qf (high, OAuth proxy) and GHSA-q84f-53jg-9ppm (high, device login approval) are patched only in 1.7.x. GHSA-44jh-23m7-hpcf (low) concerns the Drizzle and Kysely adapters on PostgreSQL. saycheese enables email/password and the Convex plugin only, with no OAuth, OAuth proxy, magic-link or device plugins and the Convex database adapter. That narrows the exposure but is not proof of safety.
-- Blocker: the latest `@convex-dev/better-auth` (0.12.6) declares `better-auth >=1.6.11 <1.7.0`. Tried 1.7.14 on 2026-10-29: it typechecks, but Convex cannot bundle the backend because the adapter imports `better-auth/plugins/oidc-provider`, which 1.7 no longer exports, and no standalone package replaces it. Do not force 1.7.x; upgrade when an adapter release supports it.
-- Exposure: the adapter's Convex plugin only checks the `/magic-link/verify` path in its hooks and registers none of the vulnerable plugins; its `auth-options` helper that does list them is not imported by saycheese.
-- Better Auth 1.6.18 and later collapse `useSession().data` to `never` in the adapter's `AuthClient` type ([get-convex/better-auth#420](https://github.com/get-convex/better-auth/issues/420)). `providers.tsx` casts the client to `AuthClient`; remove the cast once the adapter fixes the type.
-- Deepmerge (low) came from `shadcn`, which has no patched version. `shadcn` is now a dev dependency, so `deepmerge` is out of the production graph.
+- Vitest 4.1.12 clears the Vitest, `@vitest/mocker` and tinypool advisories.
+- `shadcn` (a build-time CSS import and CLI) moved to `devDependencies`, which takes `deepmerge` out of the production graph.
+- Better Auth 1.7.14 clears the remaining Better Auth advisories (critical OAuth state and magic link, high OAuth proxy and device login, low Drizzle and Kysely adapters).
+
+Better Auth 1.7 needs a patched adapter. `@convex-dev/better-auth` 0.12.6 is the latest release and declares `better-auth >=1.6.11 <1.7.0`, so `pnpm-workspace.yaml` allows 1.7.14 through `peerDependencyRules` and `patches/@convex-dev__better-auth@0.12.6.patch` changes it (in both `dist` and `src`, because the adapter's test helper loads `src`):
+
+- `plugins/convex`: 1.7 removed `better-auth/plugins/oidc-provider`. The patch replaces it with a static stand-in that serves the discovery document at `/convex/.well-known/openid-configuration` and drops the plugin's after hooks. Convex uses a `customJwt` provider that reads `/convex/jwks`, so it never needs the plugin.
+- `auth-options`: removes the `oidcProvider` entry from the schema-generation options. Its unused OIDC tables stay in the component schema.
+- `client/adapter`: 1.7 adds a `modelKey` field to adapter arguments, which the component validators reject (JWKS returned 500). The patch strips it before every component call.
+
+Verified on 2026-10-29 against the Convex dev deployment: `/convex/jwks` returns 200, and sign-up, sign-out and sign-in all work with Convex-authenticated queries.
+
+When the adapter ships a release that supports Better Auth 1.7, remove the patch and the `peerDependencyRules` entry and re-run the audit.
+
+Better Auth 1.6.18 and later collapse `useSession().data` to `never` in the adapter's `AuthClient` type ([get-convex/better-auth#420](https://github.com/get-convex/better-auth/issues/420)); 1.7.14 still does. `providers.tsx` casts the client to `AuthClient`; remove the cast once the adapter fixes the type.
 
 Re-run the audit after dependency changes. Advisory counts are time-sensitive.

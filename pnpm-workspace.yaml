@@ -4,23 +4,28 @@ packages:
 allowBuilds:
   esbuild: true
   sharp: true
-overrides:
-  # Must match @varlock/nextjs-integration in apps/web: it is a drop-in @next/env replacement.
-  "@next/env": npm:@varlock/nextjs-integration@1.2.5
 catalog:
-  zod: ^4.5.4
-  typescript: ^6.0.3
+  "@convex-dev/better-auth": ^0.12.6
+  "@tailwindcss/postcss": ^4.3.3
   "@types/node": ^26.4.1
-  varlock: 1.23.0
+  "@types/react": ^19.2.18
+  "@types/react-dom": ^19.2.7
+  better-auth: 1.7.14
+  convex: ^1.48.0
   lucide-react: ^1.41.0
   next-themes: ^0.4.6
   react: ^19.2.8
   react-dom: ^19.2.8
   sonner: ^2.0.8
-  convex: ^1.48.0
-  better-auth: 1.6.33
-  "@convex-dev/better-auth": ^0.12.6
-  "@tailwindcss/postcss": ^4.3.3
-  "@types/react": ^19.2.18
-  "@types/react-dom": ^19.2.7
   tailwindcss: ^4.3.3
+  typescript: ^6.0.3
+  varlock: 1.23.0
+  zod: ^4.5.4
+overrides:
+  # Must match @varlock/nextjs-integration in apps/web: it is a drop-in @next/env replacement.
+  "@next/env": npm:@varlock/nextjs-integration@1.2.5
+patchedDependencies:
+  '@convex-dev/better-auth@0.12.6': patches/@convex-dev__better-auth@0.12.6.patch
+peerDependencyRules:
+  allowedVersions:
+    "@convex-dev/better-auth>better-auth": "1.7.14"
