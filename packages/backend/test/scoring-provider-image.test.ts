@@ -26,38 +26,40 @@ vi.mock("../convex/lib/providers", async () => {
   const { ProviderError } = await vi.importActual<typeof ProviderTypes>(
     "../convex/lib/providers/types",
   );
+  const provider = {
+    name: "rekognition" as const,
+    model: "test-rekognition",
+    acceptedMimes: ["image/jpeg"],
+    score: async (input: {
+      bytes: Uint8Array;
+      mime: string;
+      sha256: string;
+      signal?: AbortSignal;
+    }) => {
+      recorder.calls.push(input);
+      if (recorder.failuresLeft > 0) {
+        recorder.failuresLeft -= 1;
+        throw new ProviderError("retryable", "test_retry", "simulated retry");
+      }
+      return {
+        faces: [
+          {
+            area: 0.2,
+            smileConfidence: 90,
+            smileValue: true,
+            faceConfidence: 99,
+            sharpness: 80,
+          },
+        ],
+        latencyMs: 1,
+        costMicros: 1_000,
+      };
+    },
+  };
   return {
-    providerOrder: () => ["rekognition"],
-    primaryProvider: () => ({
-      name: "rekognition",
-      model: "test-rekognition",
-      acceptedMimes: ["image/jpeg"],
-      score: async (input: {
-        bytes: Uint8Array;
-        mime: string;
-        sha256: string;
-        signal?: AbortSignal;
-      }) => {
-        recorder.calls.push(input);
-        if (recorder.failuresLeft > 0) {
-          recorder.failuresLeft -= 1;
-          throw new ProviderError("retryable", "test_retry", "simulated retry");
-        }
-        return {
-          faces: [
-            {
-              area: 0.2,
-              smileConfidence: 90,
-              smileValue: true,
-              faceConfidence: 99,
-              sharpness: 80,
-            },
-          ],
-          latencyMs: 1,
-          costMicros: 1_000,
-        };
-      },
-    }),
+    providerOrder: () => ["rekognition"] as const,
+    providerFor: () => provider,
+    primaryProvider: () => provider,
   };
 });
 

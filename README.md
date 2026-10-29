@@ -148,6 +148,33 @@ The backend validates these keys at module load (`packages/backend/convex/env.ts
 
 Costs use `REKOGNITION_COST_MICROS_PER_IMAGE` in `packages/backend/convex/lib/providers/rekognition.ts`. The current value (1,000 micros = $0.001 per image) is a **labelled placeholder assumption, not a verified price**; confirm the DetectFaces list price for the deployment region in the AWS console before relying on `costMicros`. Scoring reads the stored WebP variant and converts it in memory to JPEG (quality 90, metadata stripped) before calling Rekognition, so the scoring action runs in Convex's Node runtime; Rekognition itself is signed with `aws4fetch`.
 
+### Google Cloud Vision
+
+Vision is opt-in and needs a service-account JSON holding `client_email`, `private_key` (PKCS#8 PEM) and optionally `token_uri`. Put the JSON (the whole file, as one value) in:
+
+```bash
+SMILE_PROVIDER=vision
+GOOGLE_APPLICATION_CREDENTIALS_JSON='{"client_email":"...","private_key":"-----BEGIN PRIVATE KEY-----\n..."}'
+```
+
+For the Rekognition-primary fallback the same variable is optional; without it the fallback is skipped and the run ends `unavailable`.
+
+- Enable the **Cloud Vision API** in the service account's project and grant the account a role that allows `images.annotate` (for example `roles/cloudvision.user`).
+- The adapter signs an RS256 service-account JWT for scope `https://www.googleapis.com/auth/cloud-vision`, exchanges it at the service account's token endpoint, and caches the access token in module scope until 60 s before expiry.
+- Requests use `images:annotate` with `FACE_DETECTION`; accepted MIME types are JPEG, PNG and WebP. The stored WebP is sent unchanged.
+- Vision reports `detectionConfidence` (0..1), which is scaled to core's 0..100, and a per-face `joyLikelihood`; the dominant face's likelihood maps through `VISION_JOY_SCORES` (`VERY_LIKELY` 90 down to `VERY_UNLIKELY` 10, `UNKNOWN` -> `low_quality`). Vision has no sharpness signal, so sharpness is left undefined and is not treated as low quality.
+- Costs use `VISION_COST_MICROS_PER_IMAGE` (1,500 micros = $0.0015 per image). That value is a **labelled placeholder assumption, not a verified price**; confirm the FACE_DETECTION unit price for the billing project.
+- `GOOGLE_APPLICATION_CREDENTIALS_JSON` is required at module load when `SMILE_PROVIDER=vision`, and parsed as JSON. Token exchange failures are fatal.
+
+### Fallback rules
+
+With `SMILE_PROVIDER=rekognition` the order is Rekognition then Vision:
+
+- The primary gets its normal single retry. If it ends in a retryable error or timeout, Vision gets one attempt within the same 10 s budget. Vision may retry once only when a full per-call timeout still fits after the retry wait.
+- Fatal primary failures — bad credentials, invalid image, permission denied — do **not** fall back. A primary that cannot be constructed is recorded `unavailable` rather than silently routed to Vision; a misconfigured deployment must be visible.
+- A Vision fallback that cannot be constructed (no credentials) is skipped. Every attempt is recorded in `scoringAttempts` with its provider; the score row names the provider that answered.
+- The content cache is looked up once for the primary provider. If Vision answered, its row is keyed under `vision`; a later image with the same bytes misses the primary lookup and costs one extra call.
+
 ## Deployment
 
 ### Vercel Services

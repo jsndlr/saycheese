@@ -30,7 +30,8 @@ export type ProviderFace = {
   smileConfidence: number;
   smileValue: boolean | null;
   faceConfidence: number;
-  sharpness: number | null;
+  /** `undefined` when the provider has no sharpness signal (Vision). */
+  sharpness?: number | null;
 };
 
 export type ProviderResult = {
@@ -38,6 +39,8 @@ export type ProviderResult = {
   latencyMs: number;
   costMicros: number;
   error?: string;
+  /** Vision only: joy likelihood of the dominant face; absent for other providers. */
+  joyLikelihood?: string;
 };
 
 export function rekognitionSmileScore(smileConfidence: number, value: boolean): number {
@@ -124,7 +127,7 @@ export function mapProviderResult(result: ProviderResult, meta: ProviderMeta): S
 
   if (
     dominant.faceConfidence < MIN_FACE_CONFIDENCE ||
-    (dominant.sharpness !== null && dominant.sharpness < MIN_SHARPNESS)
+    (dominant.sharpness != null && dominant.sharpness < MIN_SHARPNESS)
   ) {
     return {
       ...base,

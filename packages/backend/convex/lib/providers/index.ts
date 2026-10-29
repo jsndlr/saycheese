@@ -1,6 +1,7 @@
 import { createRekognitionProvider } from "./rekognition";
 import { stubProvider } from "./stub";
 import { ProviderError, type ProviderName, type SmileProvider } from "./types";
+import { createVisionProvider } from "./vision";
 
 /**
  * Selection layer. `env` is threaded through so the real adapters (tasks 4/5)
@@ -14,6 +15,7 @@ export type ProviderEnv = {
   AWS_REGION?: string;
   AWS_ACCESS_KEY_ID?: string;
   AWS_SECRET_ACCESS_KEY?: string;
+  GOOGLE_APPLICATION_CREDENTIALS_JSON?: string;
 };
 
 export function providerFor(name: ProviderName, env: ProviderEnv): SmileProvider {
@@ -35,12 +37,41 @@ export function providerFor(name: ProviderName, env: ProviderEnv): SmileProvider
         secretAccessKey: AWS_SECRET_ACCESS_KEY,
       });
     }
-    case "vision":
-      throw new ProviderError(
-        "fatal",
-        "adapter_unimplemented",
-        `Smile provider "${name}" is not implemented yet (Phase 3 task 5).`,
-      );
+    case "vision": {
+      const raw = env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
+      if (!raw) {
+        throw new ProviderError(
+          "fatal",
+          "missing_credentials",
+          "SMILE_PROVIDER=vision requires GOOGLE_APPLICATION_CREDENTIALS_JSON.",
+        );
+      }
+
+      let parsed: { client_email?: unknown; private_key?: unknown; token_uri?: unknown };
+      try {
+        parsed = JSON.parse(raw) as typeof parsed;
+      } catch {
+        throw new ProviderError(
+          "fatal",
+          "invalid_credentials",
+          "GOOGLE_APPLICATION_CREDENTIALS_JSON is not valid JSON.",
+        );
+      }
+
+      if (typeof parsed.client_email !== "string" || typeof parsed.private_key !== "string") {
+        throw new ProviderError(
+          "fatal",
+          "invalid_credentials",
+          "GOOGLE_APPLICATION_CREDENTIALS_JSON must contain client_email and private_key.",
+        );
+      }
+
+      return createVisionProvider({
+        clientEmail: parsed.client_email,
+        privateKey: parsed.private_key,
+        tokenUri: typeof parsed.token_uri === "string" ? parsed.token_uri : undefined,
+      });
+    }
     default: {
       const unknown: never = name;
       throw new ProviderError(
@@ -76,9 +107,9 @@ export function providerOrder(env: ProviderEnv): readonly ProviderName[] {
 }
 
 /**
- * The provider this phase scores with: first in plan order, no fallback yet
- * (task 5 adds the remaining ones). Callers that cannot throw should catch
- * `ProviderError`; the adapters 4/5 add are not implemented yet.
+ * The configured primary provider (first in plan order). The scoring action
+ * walks `providerOrder` itself so it can fall back; this helper remains for
+ * callers that only need the primary's model label (the stuck sweep).
  */
 export function primaryProvider(env: ProviderEnv): SmileProvider {
   return providerFor(providerOrder(env)[0], env);

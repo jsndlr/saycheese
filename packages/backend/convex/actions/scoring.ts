@@ -12,7 +12,7 @@ import {
   type ProviderName,
   type SmileProvider,
 } from "../lib/providers/types";
-import { primaryProvider, providerOrder } from "../lib/providers";
+import { providerFor, providerOrder } from "../lib/providers";
 import { providerImage } from "../lib/providerImage";
 import {
   SCORING_CALL_TIMEOUT_MS,
@@ -26,20 +26,33 @@ import { unavailableResult } from "../internal/scoring";
 /**
  * Plan 6.2 scoring action.
  *
- * One image, one provider (`providerOrder(env)[0]`, the stub by default):
+ * One image, providers in `providerOrder(env)` order (the stub by default):
  * - 6 s per provider call via AbortController;
- * - exactly one retry, after 200 ms ± 50 ms of jitter, for retryable errors
- *   and timeouts only;
- * - the whole call sequence must finish within 10 s.
+ * - the primary gets exactly one retry, after 200 ms ± 50 ms of jitter, for
+ *   retryable errors and timeouts only;
+ * - a retryable/timeout primary failure falls back once to the next provider;
+ * - the fallback may retry once too, but only when a full per-call timeout
+ *   still fits in the remaining total budget;
+ * - the whole sequence must finish within 10 s.
+ *
+ * Fatal primary errors (bad credentials, invalid image, permission denied)
+ * never fall back: the fallback would repeat the same failure and hide a
+ * deployment problem. A primary that cannot even be constructed is also
+ * recorded as unavailable instead of silently switching providers.
  *
  * Retry ownership: this action, not the workpool. The workpool's retry is
  * disabled, so each attempt is visible in `scoringAttempts` and all attempts
  * share the same 10 s budget. A failing attempt holds its workpool slot while
  * it waits, which is intended: four provider calls at a time, retries included.
  *
- * No fallback provider (task 5), no per-user rate limit (task 6). The content
- * cache (task 3) is consulted in `tryCached`, a mutation, before any pixels or
- * provider are touched; a hit ends the run.
+ * The content cache is consulted once, for the primary provider, in
+ * `tryCached` before any pixels or provider are touched; a hit ends the run.
+ * If the fallback answers, the score row is keyed under the fallback provider
+ * name (correct for its content). A later image with the same bytes looks up
+ * the primary, misses, and pays one extra call; multi-provider cache lookups
+ * are deliberately out of scope for this phase.
+ *
+ * No per-user rate limit yet (task 6).
  */
 
 type ProviderCall =
@@ -150,8 +163,9 @@ function toScoreResult(
           provider: "vision",
           providerModel: provider.model,
           cached: false,
-          // TODO(task 5): the Vision adapter must carry the joy likelihood.
-          joyLikelihood: "",
+          // Vision reports a per-face likelihood; an absent value maps to
+          // `low_quality` in core rather than inventing a smile score.
+          joyLikelihood: result.joyLikelihood ?? "",
         }
       : {
           provider: provider.name,
@@ -186,7 +200,8 @@ export const score = internalAction({
       return;
     }
 
-    const primaryName: ProviderName = providerOrder(env)[0];
+    const order = providerOrder(env);
+    const primaryName: ProviderName = order[0];
     const cached = await ctx.runMutation(internal.internal.scoring.tryCached, {
       imageId,
       provider: primaryName,
@@ -197,18 +212,30 @@ export const score = internalAction({
       return;
     }
 
-    let provider: SmileProvider | null = null;
-    try {
-      provider = primaryProvider(env);
-    } catch (error) {
-      const code = error instanceof ProviderError ? error.code : "unexpected_error";
-      log("image.scoring.provider_missing", {
-        imageId,
-        provider: primaryName,
-        outcome: "fatal_error",
-        errorCode: code,
+    const finishUnavailable = async (
+      label: { name: ProviderName; model: string },
+      latencyMs: number,
+      attempts: ScoringAttempt[],
+    ): Promise<void> => {
+      const result = unavailableResult({
+        provider: label.name,
+        providerModel: label.model,
+        configVersion: env.SCORING_CONFIG_VERSION,
+        latencyMs,
       });
-    }
+      const recorded = await ctx.runMutation(internal.internal.scoring.record, {
+        imageId,
+        result,
+        attempts,
+      });
+      log("image.scoring.result", {
+        imageId,
+        provider: label.name,
+        outcome: result.status,
+        latencyMs,
+        recorded,
+      });
+    };
 
     let bytes: Uint8Array;
     try {
@@ -224,140 +251,161 @@ export const score = internalAction({
         outcome: "fatal_error",
         errorCode: error instanceof Error ? error.message : String(error),
       });
-      await ctx.runMutation(internal.internal.scoring.record, {
-        imageId,
-        result: unavailableResult({
-          provider: primaryName,
-          providerModel: provider?.model ?? "unknown",
-          configVersion: env.SCORING_CONFIG_VERSION,
-          latencyMs: 0,
-        }),
-        attempts: [],
-      });
-      return;
-    }
-
-    if (provider === null) {
-      await ctx.runMutation(internal.internal.scoring.record, {
-        imageId,
-        result: unavailableResult({
-          provider: primaryName,
-          providerModel: "unknown",
-          configVersion: env.SCORING_CONFIG_VERSION,
-          latencyMs: 0,
-        }),
-        attempts: [],
-      });
-      return;
-    }
-
-    // Rekognition does not accept the stored WebP, so convert once here,
-    // before the retry loop; retries reuse the same bytes.
-    const conversionStartedAt = Date.now();
-    let image: { bytes: Uint8Array; mime: string };
-    try {
-      image = await providerImage(bytes, target.mime, provider.acceptedMimes);
-    } catch (error) {
-      const code = error instanceof ProviderError ? error.code : "unexpected_error";
-      const latencyMs = Date.now() - conversionStartedAt;
-      log("image.scoring.provider_image_failed", {
-        imageId,
-        provider: provider.name,
-        outcome: "fatal_error",
-        errorCode: code,
-      });
-      await ctx.runMutation(internal.internal.scoring.record, {
-        imageId,
-        result: unavailableResult({
-          provider: provider.name,
-          providerModel: provider.model,
-          configVersion: env.SCORING_CONFIG_VERSION,
-          latencyMs,
-        }),
-        attempts: [],
-      });
+      await finishUnavailable(
+        { name: primaryName, model: "unknown" },
+        0,
+        [],
+      );
       return;
     }
 
     const startedAt = Date.now();
     const deadline = startedAt + SCORING_TOTAL_BUDGET_MS;
     const attempts: ScoringAttempt[] = [];
+    let primaryModel = "unknown";
 
-    for (let attemptIndex = 0; attemptIndex < 2; attemptIndex += 1) {
-      const remaining = deadline - Date.now();
-      if (remaining <= 0) {
-        break;
+    for (let orderIndex = 0; orderIndex < order.length; orderIndex += 1) {
+      const name = order[orderIndex] as ProviderName;
+      const isFallback = orderIndex > 0;
+
+      let provider: SmileProvider;
+      try {
+        provider = providerFor(name, env);
+      } catch (error) {
+        const code = error instanceof ProviderError ? error.code : "unexpected_error";
+        log("image.scoring.provider_missing", {
+          imageId,
+          provider: name,
+          outcome: "fatal_error",
+          errorCode: code,
+        });
+        if (!isFallback) {
+          // A misconfigured primary is a deployment error, not a provider
+          // outage: falling back would hide it and silently change the mapping.
+          await finishUnavailable(
+            { name: primaryName, model: "unknown" },
+            Date.now() - startedAt,
+            attempts,
+          );
+          return;
+        }
+        // A fallback without credentials is simply unavailable; the primary
+        // attempts already recorded decide the outcome below.
+        continue;
       }
 
-      const call = await callProvider(provider, {
-        bytes: image.bytes,
-        mime: image.mime,
-        sha256: target.sha256,
-        timeoutMs: Math.min(SCORING_CALL_TIMEOUT_MS, remaining),
-      });
+      if (!isFallback) primaryModel = provider.model;
 
-      if (call.kind === "result") {
-        attempts.push({
-          provider: provider.name,
-          outcome: "success",
-          latencyMs: call.latencyMs,
-          at: Date.now(),
-        });
-        const result = toScoreResult(provider, call.result, env.SCORING_CONFIG_VERSION);
-        const recorded = await ctx.runMutation(internal.internal.scoring.record, {
+      // Rekognition accepts JPEG/PNG and Vision accepts all three; convert per
+      // provider so a fallback gets the format its adapter accepts.
+      const conversionStartedAt = Date.now();
+      let image: { bytes: Uint8Array; mime: string };
+      try {
+        image = await providerImage(bytes, target.mime, provider.acceptedMimes);
+      } catch (error) {
+        const code = error instanceof ProviderError ? error.code : "unexpected_error";
+        const latencyMs = Date.now() - conversionStartedAt;
+        log("image.scoring.provider_image_failed", {
           imageId,
-          result,
+          provider: name,
+          outcome: "fatal_error",
+          errorCode: code,
+        });
+        // An image the provider cannot accept is terminal: another provider
+        // would only repeat the same conversion failure.
+        await finishUnavailable(
+          { name: provider.name, model: provider.model },
+          latencyMs,
           attempts,
-        });
-        log("image.scoring.result", {
-          imageId,
-          provider: provider.name,
-          outcome: result.status,
-          latencyMs: call.latencyMs,
-          recorded,
-        });
+        );
         return;
       }
 
-      attempts.push(call.attempt);
-      log("image.scoring.attempt", {
-        imageId,
-        provider: provider.name,
-        outcome: call.attempt.outcome,
-        latencyMs: call.attempt.latencyMs,
-      });
+      let retryableFailure = false;
+      for (let attemptIndex = 0; attemptIndex < 2; attemptIndex += 1) {
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) {
+          retryableFailure = true;
+          break;
+        }
 
-      if (!call.retryable || attemptIndex === 1) {
-        break;
+        const call = await callProvider(provider, {
+          bytes: image.bytes,
+          mime: image.mime,
+          sha256: target.sha256,
+          timeoutMs: Math.min(SCORING_CALL_TIMEOUT_MS, remaining),
+        });
+
+        if (call.kind === "result") {
+          attempts.push({
+            provider: provider.name,
+            outcome: "success",
+            latencyMs: call.latencyMs,
+            at: Date.now(),
+          });
+          const result = toScoreResult(provider, call.result, env.SCORING_CONFIG_VERSION);
+          const recorded = await ctx.runMutation(internal.internal.scoring.record, {
+            imageId,
+            result,
+            attempts,
+          });
+          log("image.scoring.result", {
+            imageId,
+            provider: provider.name,
+            outcome: result.status,
+            latencyMs: call.latencyMs,
+            recorded,
+          });
+          return;
+        }
+
+        attempts.push(call.attempt);
+        log("image.scoring.attempt", {
+          imageId,
+          provider: provider.name,
+          outcome: call.attempt.outcome,
+          latencyMs: call.attempt.latencyMs,
+        });
+
+        if (!call.retryable) {
+          // Fatal primary errors do not fall back (bad credentials, bad image,
+          // permission denied); a fatal fallback ends the run too.
+          await finishUnavailable(
+            { name: provider.name, model: provider.model },
+            Date.now() - startedAt,
+            attempts,
+          );
+          return;
+        }
+
+        retryableFailure = true;
+        if (attemptIndex === 1) break;
+
+        const delay = retryDelayMs();
+        if (Date.now() + delay >= deadline) break;
+        // Fallback retry rule: only when one full provider call still fits
+        // after the wait. The primary already owns the ordinary retry.
+        if (
+          isFallback &&
+          Date.now() + delay + SCORING_CALL_TIMEOUT_MS > deadline
+        ) {
+          break;
+        }
+
+        const { promise, resolve } = Promise.withResolvers<void>();
+        setTimeout(resolve, delay);
+        await promise;
       }
 
-      const delay = retryDelayMs();
-      if (Date.now() + delay >= deadline) {
-        break;
-      }
-      const { promise, resolve } = Promise.withResolvers<void>();
-      setTimeout(resolve, delay);
-      await promise;
+      // Only a retryable/timeout primary failure reaches this point with more
+      // providers left; the loop then tries the fallback once.
+      if (!isFallback && retryableFailure) continue;
     }
 
-    const elapsed = Date.now() - startedAt;
-    const result = unavailableResult({
-      provider: provider.name,
-      providerModel: provider.model,
-      configVersion: env.SCORING_CONFIG_VERSION,
-      latencyMs: elapsed,
-    });
-    const recorded = await ctx.runMutation(internal.internal.scoring.record, {
-      imageId,
-      result,
+    await finishUnavailable(
+      { name: primaryName, model: primaryModel },
+      Date.now() - startedAt,
       attempts,
-    });
-    log("image.scoring.result", {
-      imageId,
-      provider: provider.name,
-      outcome: result.status,
-      latencyMs: elapsed,
-      recorded,
-    });
+    );
   },
 });

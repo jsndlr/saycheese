@@ -179,7 +179,7 @@ describe("provider selection", () => {
 
     const vision = caught(() => providerFor("vision", { SMILE_PROVIDER: "vision" }));
     expect(vision).toBeInstanceOf(ProviderError);
-    expect(vision).toMatchObject({ kind: "fatal", code: "adapter_unimplemented" });
+    expect(vision).toMatchObject({ kind: "fatal", code: "missing_credentials" });
     expect(isRetryable(vision)).toBe(false);
   });
 
