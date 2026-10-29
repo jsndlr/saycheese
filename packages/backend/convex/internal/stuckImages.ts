@@ -1,9 +1,12 @@
-import { PROCESSING_TIMEOUT_MS } from "@saycheese/core/limits";
+import { PROCESSING_TIMEOUT_MS, SCORING_TIMEOUT_MS } from "@saycheese/core/limits";
 import { v } from "convex/values";
 
 import { internal } from "../_generated/api";
 import { internalMutation } from "../_generated/server";
+import { env } from "../env";
+import { primaryProvider, providerOrder } from "../lib/providers";
 import { failImage } from "./images";
+import { recordUnavailable } from "./scoring";
 
 /**
  * Fails rows whose processing never finished.
@@ -69,12 +72,54 @@ export const run = internalMutation({
       }
     }
 
-    // Reschedule only when a full batch actually failed rows: a full batch of
-    // rows that are all too young makes no progress, and scheduling again
+    // `scoring` rows whose action never finished. They are not image failures:
+    // the variants are fine and only the score is missing, so they get the
+    // stable `unavailable` score (and the UI keeps showing the image).
+    // Timestamp-less rows are excluded exactly like `processing` above: the
+    // seed's demo `scoring` row has no timestamp and must survive; every row
+    // `markReady` creates has one.
+    const scoringCutoff = now - SCORING_TIMEOUT_MS;
+    const scoring = await ctx.db
+      .query("images")
+      .withIndex("by_status_scoring_started", (q) =>
+        q
+          .eq("status", "scoring")
+          .gt("scoringStartedAt", 0)
+          .lt("scoringStartedAt", scoringCutoff),
+      )
+      .take(limit);
+
+    const primaryName = providerOrder(env)[0];
+    let primaryModel = "unknown";
+    try {
+      // Adapters added in tasks 4/5 may not be implemented yet; the sweep must
+      // still converge, so an unavailable model label is acceptable here.
+      primaryModel = primaryProvider(env).model;
+    } catch {
+      primaryModel = "unknown";
+    }
+
+    let scoringRecorded = 0;
+    for (const image of scoring) {
+      if (
+        await recordUnavailable(ctx, image._id, {
+          provider: primaryName,
+          providerModel: primaryModel,
+          configVersion: env.SCORING_CONFIG_VERSION,
+          at: now,
+        })
+      ) {
+        scoringRecorded += 1;
+      }
+    }
+
+    // Reschedule only when a full batch actually made progress: a full batch
+    // of rows that are all too young makes no progress, and scheduling again
     // would loop forever without changing anything.
     const more =
       (processing.length === limit && processingFailed > 0) ||
-      (uploaded.length === limit && uploadedFailed > 0);
+      (uploaded.length === limit && uploadedFailed > 0) ||
+      (scoring.length === limit && scoringRecorded > 0);
     if (more) {
       await ctx.scheduler.runAfter(0, internal.internal.stuckImages.run, {});
     }
@@ -86,6 +131,8 @@ export const run = internalMutation({
         processingFailed,
         uploadedChecked: uploaded.length,
         uploadedFailed,
+        scoringChecked: scoring.length,
+        scoringRecorded,
         more,
       }),
     );
@@ -95,6 +142,8 @@ export const run = internalMutation({
       processingFailed,
       uploadedChecked: uploaded.length,
       uploadedFailed,
+      scoringChecked: scoring.length,
+      scoringRecorded,
       more,
     };
   },

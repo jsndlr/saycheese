@@ -1,5 +1,6 @@
 import type { ComponentApi } from "@convex-dev/better-auth/_generated/component.js";
 import { register } from "@convex-dev/better-auth/test";
+import { register as registerWorkpool } from "@convex-dev/workpool/test";
 import { MAX_UPLOAD_BYTES, UPLOAD_COMMIT_GRACE_MS, UPLOAD_URL_TTL_MS } from "@saycheese/core/limits";
 import { convexTest } from "convex-test";
 import type { TestConvex } from "convex-test";
@@ -160,6 +161,7 @@ it("T-API-01 requires auth and hands out a one-hour upload URL", async () => {
 
 it("T-API-02 commits one uploaded row, one audit row, and the process job", async () => {
   const t = convexTest(schema, modules);
+  registerWorkpool(t, "scoringPool");
   const { user, asUser } = await signedIn(t);
   const bytes = encoder.encode("say cheese");
   const sha256 = await sha256Hex(bytes);
@@ -209,6 +211,7 @@ it("T-API-02 commits one uploaded row, one audit row, and the process job", asyn
 
 it("T-API-03 deduplicates per user and never duplicates rows or jobs", async () => {
   const t = convexTest(schema, modules);
+  registerWorkpool(t, "scoringPool");
   const component = register(t, "betterAuth");
   const { user: userA, asUser: asA } = await createAccount(t, component, "a@example.test");
   const { asUser: asB } = await createAccount(t, component, "b@example.test");

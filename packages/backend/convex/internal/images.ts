@@ -1,10 +1,12 @@
 import type { ErrorCode } from "@saycheese/core/errors";
 import { v } from "convex/values";
 
+import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { internalMutation } from "../_generated/server";
 import { deleteIfExists } from "../lib/storage";
+import { scoringPool } from "../lib/scoringPool";
 import { errorCode } from "../validators";
 
 /**
@@ -60,7 +62,11 @@ export const markReady = internalMutation({
 
     const rawStorageId = image.rawStorageId;
     await ctx.db.patch("images", args.imageId, {
-      status: "ready",
+      // Straight to `scoring`: the variants exist, so the row now belongs to
+      // the scoring pool. `ready` remains a valid (legacy/test) state but no
+      // production transition produces it any more.
+      status: "scoring",
+      scoringStartedAt: Date.now(),
       storageId: args.storageId,
       previewId: args.previewId,
       thumbId: args.thumbId,
@@ -74,6 +80,16 @@ export const markReady = internalMutation({
     if (rawStorageId !== undefined) {
       await deleteIfExists(ctx, rawStorageId);
     }
+
+    // Same transaction as the patch: the row can never be `scoring` without a
+    // queued job (or a timestamp the stuck sweep can act on). Retries are
+    // owned by the action, so the component's retry is explicitly off.
+    await scoringPool.enqueueAction(
+      ctx,
+      internal.scoring.score,
+      { imageId: args.imageId },
+      { retry: false },
+    );
     return true;
   },
 });

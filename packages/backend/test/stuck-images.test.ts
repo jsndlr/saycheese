@@ -1,4 +1,4 @@
-import { PROCESSING_TIMEOUT_MS } from "@saycheese/core/limits";
+import { PROCESSING_TIMEOUT_MS, SCORING_TIMEOUT_MS } from "@saycheese/core/limits";
 import { convexTest } from "convex-test";
 import type { TestConvex } from "convex-test";
 import { makeFunctionReference } from "convex/server";
@@ -22,6 +22,8 @@ type SweepResult = {
   processingFailed: number;
   uploadedChecked: number;
   uploadedFailed: number;
+  scoringChecked: number;
+  scoringRecorded: number;
   more: boolean;
 };
 
@@ -40,6 +42,7 @@ async function insertImage(
     status: Doc<"images">["status"];
     createdAt: number;
     processingStartedAt?: number;
+    scoringStartedAt?: number;
     storage?: boolean;
     storageMissing?: boolean;
   },
@@ -64,11 +67,15 @@ async function insertImage(
       userId: "user-1",
       sha256: "c".repeat(64),
       rawStorageId: storageIds[0],
-      storageId: fields.status === "ready" ? storageIds[1] : undefined,
+      storageId:
+        fields.status === "ready" || fields.status === "scoring"
+          ? storageIds[1]
+          : undefined,
       mime: "image/jpeg",
       bytes: 3,
       status: fields.status,
       processingStartedAt: fields.processingStartedAt,
+      scoringStartedAt: fields.scoringStartedAt,
       createdAt: fields.createdAt,
     });
     return { imageId, storageIds };
@@ -210,6 +217,69 @@ it("fails an old uploaded row whose process action never ran", async () => {
     before: { status: "uploaded" },
     after: { status: "failed", failureCode: "IMAGE_TIMEOUT" },
   });
+});
+
+it("records unavailable for scoring rows past the timeout, not a failure", async () => {
+  const t = convexTest(schema, modules);
+  const now = Date.now();
+  const { imageId, storageIds } = await insertImage(t, {
+    status: "scoring",
+    createdAt: now - OLD_MS,
+    scoringStartedAt: now - SCORING_TIMEOUT_MS - 60_000,
+  });
+
+  const result = await t.mutation(runSweep, {});
+
+  expect(result).toMatchObject({
+    scoringChecked: 1,
+    scoringRecorded: 1,
+    more: false,
+  });
+  const row = await imageRow(t, imageId);
+  expect(row).toMatchObject({ status: "scored" });
+  expect(row?.scoringStartedAt).toBeUndefined();
+  expect(row?.scoreId).toBeDefined();
+
+  const score = await t.run(async (ctx) => ctx.db.get("scores", row!.scoreId!));
+  expect(score).toMatchObject({
+    sha256: "c".repeat(64),
+    score: null,
+    confidence: null,
+    faceCount: 0,
+    status: "unavailable",
+    provider: "stub",
+    providerModel: "stub-v1",
+  });
+  // The image itself is fine: variants stay.
+  for (const storageId of storageIds) {
+    expect(await storageExists(t, storageId)).toBe(true);
+  }
+
+  const events = await audits(t);
+  expect(events).toHaveLength(1);
+  expect(events[0]).toMatchObject({
+    actorId: "system:scoring",
+    action: "score.fail",
+    docId: imageId,
+    before: { status: "scoring" },
+    after: { status: "scored", scoreStatus: "unavailable" },
+  });
+});
+
+it("ignores a scoring row without a scoring timestamp, however old", async () => {
+  const t = convexTest(schema, modules);
+  const now = Date.now();
+  const { imageId } = await insertImage(t, {
+    status: "scoring",
+    createdAt: now - OLD_MS,
+  });
+  const before = await imageRow(t, imageId);
+
+  const result = await t.mutation(runSweep, {});
+
+  expect(result).toMatchObject({ scoringChecked: 0, scoringRecorded: 0 });
+  expect(await imageRow(t, imageId)).toEqual(before);
+  expect(await audits(t)).toHaveLength(0);
 });
 
 it("never touches ready, scoring or scored rows, however old", async () => {

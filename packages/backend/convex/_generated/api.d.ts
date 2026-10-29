@@ -18,6 +18,7 @@ import type * as functions from "../functions.js";
 import type * as healthCheck from "../healthCheck.js";
 import type * as http from "../http.js";
 import type * as internal_images from "../internal/images.js";
+import type * as internal_scoring from "../internal/scoring.js";
 import type * as internal_seed from "../internal/seed.js";
 import type * as internal_seedData from "../internal/seedData.js";
 import type * as internal_storageSweep from "../internal/storageSweep.js";
@@ -27,12 +28,15 @@ import type * as lib_imageValidation from "../lib/imageValidation.js";
 import type * as lib_providers_index from "../lib/providers/index.js";
 import type * as lib_providers_stub from "../lib/providers/stub.js";
 import type * as lib_providers_types from "../lib/providers/types.js";
+import type * as lib_scoringPolicy from "../lib/scoringPolicy.js";
+import type * as lib_scoringPool from "../lib/scoringPool.js";
 import type * as lib_seedGuard from "../lib/seedGuard.js";
 import type * as lib_storage from "../lib/storage.js";
 import type * as model_images from "../model/images.js";
 import type * as model_seed from "../model/seed.js";
 import type * as queries_images from "../queries/images.js";
 import type * as queries_me from "../queries/me.js";
+import type * as scoring from "../scoring.js";
 import type * as validators_index from "../validators/index.js";
 
 import type {
@@ -52,6 +56,7 @@ declare const fullApi: ApiFromModules<{
   healthCheck: typeof healthCheck;
   http: typeof http;
   "internal/images": typeof internal_images;
+  "internal/scoring": typeof internal_scoring;
   "internal/seed": typeof internal_seed;
   "internal/seedData": typeof internal_seedData;
   "internal/storageSweep": typeof internal_storageSweep;
@@ -61,12 +66,15 @@ declare const fullApi: ApiFromModules<{
   "lib/providers/index": typeof lib_providers_index;
   "lib/providers/stub": typeof lib_providers_stub;
   "lib/providers/types": typeof lib_providers_types;
+  "lib/scoringPolicy": typeof lib_scoringPolicy;
+  "lib/scoringPool": typeof lib_scoringPool;
   "lib/seedGuard": typeof lib_seedGuard;
   "lib/storage": typeof lib_storage;
   "model/images": typeof model_images;
   "model/seed": typeof model_seed;
   "queries/images": typeof queries_images;
   "queries/me": typeof queries_me;
+  scoring: typeof scoring;
   "validators/index": typeof validators_index;
 }>;
 
@@ -98,4 +106,5 @@ export declare const internal: FilterApi<
 
 export declare const components: {
   betterAuth: import("@convex-dev/better-auth/_generated/component.js").ComponentApi<"betterAuth">;
+  scoringPool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"scoringPool">;
 };

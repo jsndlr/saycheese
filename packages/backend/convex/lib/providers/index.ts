@@ -56,3 +56,12 @@ export function providerOrder(env: ProviderEnv): readonly ProviderName[] {
     }
   }
 }
+
+/**
+ * The provider this phase scores with: first in plan order, no fallback yet
+ * (task 5 adds the remaining ones). Callers that cannot throw should catch
+ * `ProviderError`; the adapters 4/5 add are not implemented yet.
+ */
+export function primaryProvider(env: ProviderEnv): SmileProvider {
+  return providerFor(providerOrder(env)[0], env);
+}

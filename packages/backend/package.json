@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@convex-dev/better-auth": "catalog:",
+    "@convex-dev/workpool": "^0.4.15",
     "@saycheese/core": "workspace:*",
     "better-auth": "catalog:",
     "convex": "catalog:",

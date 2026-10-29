@@ -19,6 +19,7 @@ export type SmileScore = {
 };
 
 export const CONFIG_VERSION = "scoring-v1";
+export const UNAVAILABLE_REASON = "Scoring is unavailable";
 export const MIN_FACE_CONFIDENCE = 90;
 export const MIN_SHARPNESS = 20;
 
@@ -106,7 +107,7 @@ export function mapProviderResult(result: ProviderResult, meta: ProviderMeta): S
       ...base,
       score: null,
       status: "unavailable",
-      reason: "Scoring is unavailable",
+      reason: UNAVAILABLE_REASON,
     };
   }
 

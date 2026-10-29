@@ -1,4 +1,5 @@
 import type { ErrorCode } from "@saycheese/core/errors";
+import { register } from "@convex-dev/workpool/test";
 import { convexTest } from "convex-test";
 import type { TestConvex } from "convex-test";
 import { makeFunctionReference } from "convex/server";
@@ -254,12 +255,14 @@ async function readyArgs(
 
 it("markReady publishes variants, dimensions and deletes the raw object", async () => {
   const t = convexTest(schema, modules);
+  register(t, "scoringPool");
   const { imageId, rawStorageId } = await uploadedImage(t, "processing");
   const args = await readyArgs(t, imageId);
 
   expect(await t.mutation(markReady, args)).toBe(true);
   expect(await imageRow(t, imageId)).toMatchObject({
-    status: "ready",
+    status: "scoring",
+    scoringStartedAt: expect.any(Number),
     storageId: args.storageId,
     previewId: args.previewId,
     thumbId: args.thumbId,

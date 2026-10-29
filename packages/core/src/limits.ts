@@ -73,6 +73,17 @@ export const RATE_LIMITS = {
  */
 export const PROCESSING_TIMEOUT_MS = 15 * 60 * 1000;
 
+/**
+ * How long an image may sit in `scoring` before the stuck sweep records an
+ * `unavailable` score.
+ *
+ * One score action is bounded by 10 s (6 s per provider call, one retry), so
+ * five minutes is 30× that budget: enough for a temporary provider outage,
+ * a workpool backlog or a crashed action, while still converging the UI long
+ * before the hourly maintenance cadence becomes noticeable.
+ */
+export const SCORING_TIMEOUT_MS = 5 * 60 * 1000;
+
 export function exceedsByteCap(bytes: number): boolean {
   return bytes > MAX_UPLOAD_BYTES;
 }

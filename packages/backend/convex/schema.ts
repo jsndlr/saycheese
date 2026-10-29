@@ -32,6 +32,9 @@ export default defineSchema({
     // Set when the process action claims the row; the stuck sweep compares it
     // against `PROCESSING_TIMEOUT_MS`.
     processingStartedAt: v.optional(v.number()),
+    // Set when `markReady` hands the row to the scoring pool; the stuck sweep
+    // compares it against `SCORING_TIMEOUT_MS`. Missing values are ignored.
+    scoringStartedAt: v.optional(v.number()),
     failureCode: v.optional(errorCode),
     scoreId: v.optional(v.id("scores")),
     createdAt: v.number(),
@@ -46,6 +49,7 @@ export default defineSchema({
     .index("by_thumb", ["thumbId"])
     .index("by_hash", ["sha256"])
     .index("by_status_started", ["status", "processingStartedAt"])
+    .index("by_status_scoring_started", ["status", "scoringStartedAt"])
     .index("by_status_created", ["status", "createdAt"]),
 
   scores: defineTable({

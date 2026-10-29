@@ -273,6 +273,7 @@ describe("schema invariants", () => {
     "images.archivedAt",
     "images.createdAt",
     "images.processingStartedAt",
+    "images.scoringStartedAt",
     "scores.createdAt",
     "scoringAttempts.at",
   ];

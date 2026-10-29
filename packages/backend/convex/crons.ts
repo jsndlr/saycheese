@@ -17,6 +17,8 @@ crons.interval(
 // A failed action, a lost scheduler run or a crash leaves the row in
 // `processing`/`uploaded` forever; the sweep fails it with IMAGE_TIMEOUT after
 // `PROCESSING_TIMEOUT_MS` and releases the storage objects it still owns.
+// A `scoring` row older than `SCORING_TIMEOUT_MS` instead gets an `unavailable`
+// score: its image is fine, only the score is missing.
 crons.interval(
   "sweep stuck images",
   { minutes: 10 },
