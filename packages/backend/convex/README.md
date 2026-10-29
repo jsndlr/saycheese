@@ -29,6 +29,48 @@ export const get = authedQuery({
 Environment variables are read only through `env` from `./env`, which validates
 them with Zod at module load.
 
+## Scoring providers
+
+`SMILE_PROVIDER` (`stub` by default) selects the adapter. The contract lives in
+`lib/providers/types.ts`; adapters return raw `ProviderResult` faces and core
+`mapProviderResult` derives the `SmileScore`. `lib/providers/index.ts` exposes
+`providerFor(name, env)` and `providerOrder(env)` (plan 6.2: Rekognition falls
+back to Vision; Vision and the stub do not fall back).
+
+The Rekognition and Vision adapters are not implemented yet; selecting either
+throws a fatal `ProviderError` with code `adapter_unimplemented`.
+
+### Deterministic stub (`stub-v1`)
+
+No network, no randomness, no clock: every field is derived from the sha256, so
+the same upload always yields the same result. Bucket by the first sha256 byte:
+
+| byte 0    | share | mapped status                                        |
+| --------- | ----- | ---------------------------------------------------- |
+| 0x00–0x1F | 12.5% | `no_face`                                            |
+| 0x20–0x3F | 12.5% | `multiple_faces` (dominant face + 1–2 smaller faces) |
+| 0x40–0x4F | 6.25% | `low_quality` (face confidence 40–89)                |
+| 0x50–0x5F | 6.25% | `low_quality` (sharpness 0–19)                       |
+| 0x60–0xFF | 62.5% | `scored`, smile confidence 10–90                     |
+
+Latency is 1–5 ms and `costMicros` is 0.
+
+### Test-only sha256 prefixes
+
+A sha256 starting with the 32-bit prefix `fa11face` triggers a test behaviour
+instead of the bucket table. This keeps timeout/retry tests on the production
+code path without mocking the provider. The next byte selects the behaviour:
+
+| sha256 prefix           | effect                                                       |
+| ----------------------- | ------------------------------------------------------------ |
+| `fa11face00`            | throws `ProviderError` kind `retryable`, code `stub_retryable` |
+| `fa11face01`            | throws `ProviderError` kind `fatal`, code `stub_fatal`       |
+| `fa11face02` + 4 hex ms | waits 0–65535 ms, then scores normally; rejects `AbortError` if aborted |
+| `fa11face03`            | returns `ProviderResult.error` → mapped `unavailable`        |
+
+A real upload hashes uniformly, so it hits the prefix with probability 2^-32
+(about 1 in 4.3 billion). The delay variant only narrows that space further.
+
 ## Seeding a development deployment
 
 `pnpm seed` (from the repo root) runs `internal/seed:run` against the

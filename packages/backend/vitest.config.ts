@@ -23,6 +23,9 @@ export default defineConfig({
           name: "edge",
           include: ["test/runtime.test.ts", "test/schema.test.ts", "test/upload.test.ts", "test/images-queries.test.ts", "test/seed.test.ts", "test/storage-sweep.test.ts", "test/image-processing.test.ts", "test/stuck-images.test.ts"],
           environment: "edge-runtime",
+          // convex-test edge suites (55-row pagination, seed, upload) exceed the
+          // 5 s default under the CPU contention of a root `pnpm test` run.
+          testTimeout: 20_000,
           env: testEnv,
           server: {
             deps: {
