@@ -41,19 +41,45 @@ export function resolveClientIp(
   );
 }
 
-/** Returns a copy of the request with only proxy-authored `x-saycheese-*` headers. */
-export function rewriteAuthRequest(request: Request, secret: string | undefined): Request {
-  const headers = new Headers(request.headers);
+/**
+ * Rebuilds the request from plain values only.
+ *
+ * Passing a `NextRequest` (or its headers/body stream) into `new Request(...)`
+ * makes the new object share Next's request internals across realms; Next's
+ * `Request` subclass then reads private fields the platform `Request` never
+ * initialised and the route throws `Cannot read private member #state`.
+ * String headers and an `ArrayBuffer` body are implementation-free, so the
+ * object handed to the library handler is a plain `Request`.
+ */
+export async function rewriteAuthRequest(
+  incoming: Request,
+  secret: string | undefined,
+): Promise<Request> {
+  const headers = new Headers();
+  for (const [name, value] of incoming.headers) {
+    const lower = name.toLowerCase();
+    if (lower === CLIENT_IP_HEADER || lower === PROXY_SECRET_HEADER) {
+      continue;
+    }
+    headers.append(name, value);
+  }
   const clientIp = resolveClientIp(headers);
-  headers.delete(CLIENT_IP_HEADER);
-  headers.delete(PROXY_SECRET_HEADER);
   if (clientIp !== null) {
     headers.set(CLIENT_IP_HEADER, clientIp);
   }
   if (secret !== undefined && secret.length > 0) {
     headers.set(PROXY_SECRET_HEADER, secret);
   }
-  return new Request(request, { headers });
+
+  const method = incoming.method.toUpperCase();
+  const body =
+    method === "GET" || method === "HEAD" ? undefined : await incoming.arrayBuffer();
+  return new Request(incoming.url, {
+    method,
+    headers,
+    body,
+    redirect: "manual",
+  });
 }
 
 export async function forwardAuthRequest(
@@ -61,5 +87,5 @@ export async function forwardAuthRequest(
   forward: (request: Request) => Promise<Response>,
   secret: string | undefined,
 ): Promise<Response> {
-  return await forward(rewriteAuthRequest(request, secret));
+  return await forward(await rewriteAuthRequest(request, secret));
 }
