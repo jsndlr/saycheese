@@ -15,6 +15,11 @@ export default defineConfig({
           name: "node",
           include: ["test/**/*.test.ts"],
           exclude: ["test/runtime.test.ts", "test/schema.test.ts", "test/upload.test.ts", "test/images-queries.test.ts", "test/seed.test.ts", "test/storage-sweep.test.ts", "test/image-processing.test.ts", "test/stuck-images.test.ts", "test/rate-limits.test.ts"],
+          // The real-timer scoring suites take ~2.5 s each alone and exceed the
+          // 5 s default under the CPU contention of a root `pnpm test` run. A
+          // timed-out action keeps running and then pollutes the next test's
+          // shared provider mocks, which surfaces as bogus attempt counts.
+          testTimeout: 20_000,
           env: testEnv,
         },
       },

@@ -346,7 +346,6 @@ it("never leaks storage ids, ownership or provider internals in DTOs", async () 
     "detail",
     "providerModel",
     "costMicros",
-    "faceCount",
   ];
   const keys = new Set([
     ...collectKeys(detail),
@@ -512,6 +511,7 @@ it("joins the score row into the DTO and returns null without one", async () => 
     score: {
       score: 91.5,
       confidence: 0.88,
+      faceCount: 1,
       status: "scored",
       reason: "clear face",
       provider: "vision",

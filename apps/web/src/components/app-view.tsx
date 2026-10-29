@@ -8,7 +8,9 @@ import { useConvexAuth, usePreloadedQuery } from "convex/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { Uploader } from "@/components/uploader";
 import { authClient } from "@/lib/auth-client";
+import { UPLOAD_COPY } from "@/lib/copy";
 
 const SIGN_OUT_ERROR = "Could not sign out. Check your connection and try again.";
 
@@ -24,19 +26,40 @@ function AccountDetails({
   onSignOut: () => void;
 }) {
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 py-8">
-      <h1 className="mb-2 text-2xl font-semibold">Your account</h1>
-      <p className="text-muted-foreground">{email}</p>
-      <p className="mt-1 text-xs text-muted-foreground">Scoring config release {release}</p>
-      <div className="mt-6 flex items-center gap-3">
-        <Button type="button" variant="outline" onClick={onSignOut}>
-          Sign out
-        </Button>
-        {signOutError ? (
-          <p role="alert" className="text-sm text-destructive">
-            {signOutError}
+    <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:py-8">
+      <h1 className="sr-only">saycheese</h1>
+      <header className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
+        <div className="min-w-0">
+          <p className="text-xs text-muted-foreground">{UPLOAD_COPY.signedInAs}</p>
+          <p className="break-words text-sm font-medium">{email}</p>
+          <p className="text-xs text-muted-foreground">
+            {UPLOAD_COPY.release(release)}
           </p>
-        ) : null}
+        </div>
+        <div className="flex items-center gap-3">
+          <Button type="button" variant="outline" onClick={onSignOut}>
+            {UPLOAD_COPY.signOut}
+          </Button>
+          {signOutError ? (
+            <p role="alert" className="text-sm text-destructive">
+              {signOutError}
+            </p>
+          ) : null}
+        </div>
+      </header>
+
+      <div className="grid grid-cols-1 gap-8 min-[720px]:grid-cols-2">
+        <Uploader />
+
+        {/* Task 3 replaces this placeholder with the paginated history. */}
+        <section aria-labelledby="history-heading" className="min-w-0">
+          <h2 id="history-heading" className="mb-4 text-lg font-semibold">
+            {UPLOAD_COPY.historyHeading}
+          </h2>
+          <div className="border border-dashed border-border bg-muted/20 p-6 text-sm text-muted-foreground">
+            {UPLOAD_COPY.historyPlaceholder}
+          </div>
+        </section>
       </div>
     </div>
   );

@@ -12,8 +12,16 @@ type OwnedCtx = DbCtx & { user: { id: string } };
  * read pixels through the `fileUrl` query.
  */
 export type ImageScoreDto = {
+  // Identity of the linked score row. The panel keys its one-shot
+  // announcement on this: a rescore links a new row (or a different cached
+  // row), so the new outcome must be announced even though the image id is
+  // unchanged.
+  id: Id<"scores">;
   score: number | null;
   confidence: number | null;
+  // Needed by the UI to explain a `multiple_faces` outcome. The provider
+  // model and cost stay server-side.
+  faceCount: number;
   status: Doc<"scores">["status"];
   reason: string;
   provider: Doc<"scores">["provider"];
@@ -84,8 +92,10 @@ export async function toImageDto(
       score === null
         ? null
         : {
+            id: score._id,
             score: score.score,
             confidence: score.confidence,
+            faceCount: score.faceCount,
             status: score.status,
             reason: score.reason,
             provider: score.provider,

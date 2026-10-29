@@ -254,6 +254,15 @@ export function toUiError(error: unknown): UiError {
 }
 
 /**
+ * Builds the same UI copy and action a server error with this code would
+ * produce. Client-side pre-checks use it so local rejections never invent
+ * copy that differs from the server's.
+ */
+export function uiErrorFromCode(code: ErrorCode): UiError {
+  return toUi(code);
+}
+
+/**
  * Copy for a rate limit / quota wait. Callers append this to the core
  * RATE_LIMITED message, for example.
  */
