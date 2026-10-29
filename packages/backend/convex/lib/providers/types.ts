@@ -18,6 +18,8 @@ export type SmileProviderInput = {
 export interface SmileProvider {
   name: ProviderName;
   model: string;
+  /** Image MIME types the provider accepts; scoring converts WebP when absent. */
+  acceptedMimes: readonly string[];
   /** Resolves with raw faces/telemetry; core `mapProviderResult` owns scoring. */
   score(input: SmileProviderInput): Promise<ProviderResult>;
 }

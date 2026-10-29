@@ -15,6 +15,7 @@
     "@convex-dev/better-auth": "catalog:",
     "@convex-dev/workpool": "^0.4.15",
     "@saycheese/core": "workspace:*",
+    "aws4fetch": "^1.0.20",
     "better-auth": "catalog:",
     "convex": "catalog:",
     "convex-helpers": "^0.1.129",

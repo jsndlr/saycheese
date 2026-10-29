@@ -156,6 +156,7 @@ function wait(ms: number, signal?: AbortSignal): Promise<void> {
 export const stubProvider: SmileProvider = {
   name: "stub",
   model: STUB_MODEL,
+  acceptedMimes: ["image/webp", "image/jpeg", "image/png"],
 
   async score({ sha256, signal }): Promise<ProviderResult> {
     throwIfAborted(signal);

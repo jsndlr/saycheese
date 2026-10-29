@@ -1,3 +1,4 @@
+import { createRekognitionProvider } from "./rekognition";
 import { stubProvider } from "./stub";
 import { ProviderError, type ProviderName, type SmileProvider } from "./types";
 
@@ -10,18 +11,35 @@ import { ProviderError, type ProviderName, type SmileProvider } from "./types";
 
 export type ProviderEnv = {
   SMILE_PROVIDER: ProviderName;
+  AWS_REGION?: string;
+  AWS_ACCESS_KEY_ID?: string;
+  AWS_SECRET_ACCESS_KEY?: string;
 };
 
-export function providerFor(name: ProviderName, _env: ProviderEnv): SmileProvider {
+export function providerFor(name: ProviderName, env: ProviderEnv): SmileProvider {
   switch (name) {
     case "stub":
       return stubProvider;
-    case "rekognition":
+    case "rekognition": {
+      const { AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY } = env;
+      if (!AWS_REGION || !AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY) {
+        throw new ProviderError(
+          "fatal",
+          "missing_credentials",
+          "SMILE_PROVIDER=rekognition requires AWS_REGION, AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.",
+        );
+      }
+      return createRekognitionProvider({
+        region: AWS_REGION,
+        accessKeyId: AWS_ACCESS_KEY_ID,
+        secretAccessKey: AWS_SECRET_ACCESS_KEY,
+      });
+    }
     case "vision":
       throw new ProviderError(
         "fatal",
         "adapter_unimplemented",
-        `Smile provider "${name}" is not implemented yet (Phase 3 tasks 4/5).`,
+        `Smile provider "${name}" is not implemented yet (Phase 3 task 5).`,
       );
     default: {
       const unknown: never = name;

@@ -120,6 +120,34 @@ Bun's automatic env loading is disabled in `bunfig.toml`; the framework integrat
 
 Run standalone Node/Bun tools that use Varlock from the owning app directory so they load that app's schema and env files. `env:generate` only generates TypeScript files; it does not initialize environment values in a subsequent command.
 
+## Smile scoring providers
+
+The repository defaults to the deterministic stub (`SMILE_PROVIDER=stub`); it needs no network or credentials. AWS Rekognition is opt-in:
+
+```bash
+SMILE_PROVIDER=rekognition
+AWS_REGION=eu-central-1
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+```
+
+The backend validates these keys at module load (`packages/backend/convex/env.ts`), so a missing key fails the push/call instead of a request. The IAM principal needs exactly one permission, `rekognition:DetectFaces`; no other Rekognition action is called. `DetectFaces` does not support resource-level permissions, so the resource is `*`:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "rekognition:DetectFaces",
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+Costs use `REKOGNITION_COST_MICROS_PER_IMAGE` in `packages/backend/convex/lib/providers/rekognition.ts`. The current value (1,000 micros = $0.001 per image) is a **labelled placeholder assumption, not a verified price**; confirm the DetectFaces list price for the deployment region in the AWS console before relying on `costMicros`. Scoring reads the stored WebP variant and converts it in memory to JPEG (quality 90, metadata stripped) before calling Rekognition, so the scoring action runs in Convex's Node runtime; Rekognition itself is signed with `aws4fetch`.
+
 ## Deployment
 
 ### Vercel Services

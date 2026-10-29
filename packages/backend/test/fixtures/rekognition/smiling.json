@@ -1,0 +1,21 @@
+{
+  "FaceDetails": [
+    {
+      "BoundingBox": {
+        "Width": 0.4,
+        "Height": 0.5,
+        "Left": 0.2,
+        "Top": 0.1
+      },
+      "Confidence": 99.8,
+      "Quality": {
+        "Brightness": 90.5,
+        "Sharpness": 80.2
+      },
+      "Smile": {
+        "Value": true,
+        "Confidence": 92.4
+      }
+    }
+  ]
+}

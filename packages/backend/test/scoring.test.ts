@@ -41,7 +41,7 @@ const markReady = makeFunctionReference<"mutation", MarkReadyArgs, boolean>(
 );
 
 const score = makeFunctionReference<"action", { imageId: Id<"images"> }, void>(
-  "scoring:score",
+  "actions/scoring:score",
 );
 
 const record = makeFunctionReference<
@@ -193,6 +193,23 @@ it("T-SCR-09 markReady enqueues and the scoring action lands a scored row", asyn
     action: "score.record",
     docId: imageId,
   });
+});
+
+it("T-SCR-09 passes the stored WebP unchanged to a provider that accepts it", async () => {
+  const t = convexTest(schema, modules);
+  const { imageId } = await insertScoringImage(t, SUCCESS_SHA);
+
+  const spy = vi.spyOn(stubProvider, "score");
+  try {
+    await t.action(score, { imageId });
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    const input = spy.mock.calls[0]?.[0];
+    expect(input?.mime).toBe("image/webp");
+    expect(Array.from(input?.bytes ?? [])).toEqual([1, 2, 3]);
+  } finally {
+    spy.mockRestore();
+  }
 });
 
 it("T-SCR-10 a retryable error records two attempts and ends unavailable", async () => {

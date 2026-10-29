@@ -86,7 +86,7 @@ export const markReady = internalMutation({
     // owned by the action, so the component's retry is explicitly off.
     await scoringPool.enqueueAction(
       ctx,
-      internal.scoring.score,
+      internal.actions.scoring.score,
       { imageId: args.imageId },
       { retry: false },
     );

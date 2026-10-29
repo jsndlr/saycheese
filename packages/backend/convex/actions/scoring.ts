@@ -1,24 +1,27 @@
+"use node";
+
 import { mapProviderResult, type ProviderResult } from "@saycheese/core/scoring";
 import { v } from "convex/values";
 
-import { internal } from "./_generated/api";
-import { internalAction } from "./_generated/server";
-import { env } from "./env";
+import { internal } from "../_generated/api";
+import { internalAction } from "../_generated/server";
+import { env } from "../env";
 import {
   isRetryable,
   ProviderError,
   type ProviderName,
   type SmileProvider,
-} from "./lib/providers/types";
-import { primaryProvider, providerOrder } from "./lib/providers";
+} from "../lib/providers/types";
+import { primaryProvider, providerOrder } from "../lib/providers";
+import { providerImage } from "../lib/providerImage";
 import {
   SCORING_CALL_TIMEOUT_MS,
   SCORING_RETRY_DELAY_MS,
   SCORING_RETRY_JITTER_MS,
   SCORING_TOTAL_BUDGET_MS,
-} from "./lib/scoringPolicy";
-import type { ScoreResult, ScoringAttempt } from "./internal/scoring";
-import { unavailableResult } from "./internal/scoring";
+} from "../lib/scoringPolicy";
+import type { ScoreResult, ScoringAttempt } from "../internal/scoring";
+import { unavailableResult } from "../internal/scoring";
 
 /**
  * Plan 6.2 scoring action.
@@ -248,6 +251,34 @@ export const score = internalAction({
       return;
     }
 
+    // Rekognition does not accept the stored WebP, so convert once here,
+    // before the retry loop; retries reuse the same bytes.
+    const conversionStartedAt = Date.now();
+    let image: { bytes: Uint8Array; mime: string };
+    try {
+      image = await providerImage(bytes, target.mime, provider.acceptedMimes);
+    } catch (error) {
+      const code = error instanceof ProviderError ? error.code : "unexpected_error";
+      const latencyMs = Date.now() - conversionStartedAt;
+      log("image.scoring.provider_image_failed", {
+        imageId,
+        provider: provider.name,
+        outcome: "fatal_error",
+        errorCode: code,
+      });
+      await ctx.runMutation(internal.internal.scoring.record, {
+        imageId,
+        result: unavailableResult({
+          provider: provider.name,
+          providerModel: provider.model,
+          configVersion: env.SCORING_CONFIG_VERSION,
+          latencyMs,
+        }),
+        attempts: [],
+      });
+      return;
+    }
+
     const startedAt = Date.now();
     const deadline = startedAt + SCORING_TOTAL_BUDGET_MS;
     const attempts: ScoringAttempt[] = [];
@@ -259,10 +290,8 @@ export const score = internalAction({
       }
 
       const call = await callProvider(provider, {
-        bytes,
-        // Scoring always uses the re-encoded original WebP variant, so the
-        // provider is told image/webp even though the upload may be JPEG/PNG.
-        mime: target.mime,
+        bytes: image.bytes,
+        mime: image.mime,
         sha256: target.sha256,
         timeoutMs: Math.min(SCORING_CALL_TIMEOUT_MS, remaining),
       });

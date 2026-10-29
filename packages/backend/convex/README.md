@@ -37,8 +37,12 @@ them with Zod at module load.
 `providerFor(name, env)` and `providerOrder(env)` (plan 6.2: Rekognition falls
 back to Vision; Vision and the stub do not fall back).
 
-The Rekognition and Vision adapters are not implemented yet; selecting either
-throws a fatal `ProviderError` with code `adapter_unimplemented`.
+The Rekognition adapter (`lib/providers/rekognition.ts`) calls `DetectFaces`
+with `Attributes: ["ALL"]` and signs the request with `aws4fetch`. The scoring
+action (`actions/scoring.ts`, `"use node"`) converts the stored WebP variant to
+JPEG before calling a provider that does not accept WebP. The Vision adapter is
+not implemented yet; selecting it throws a fatal `ProviderError` with code
+`adapter_unimplemented`.
 
 ### Deterministic stub (`stub-v1`)
 

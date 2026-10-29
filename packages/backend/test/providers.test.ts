@@ -161,15 +161,26 @@ describe("stub test overrides", () => {
 });
 
 describe("provider selection", () => {
-  it("T-SCR-16: returns the stub by default and throws fatal for unimplemented adapters", () => {
+  it("T-SCR-16: returns the stub by default, Rekognition with credentials, and rejects Vision", () => {
     expect(providerFor("stub", { SMILE_PROVIDER: "stub" })).toBe(stubProvider);
 
-    for (const name of ["rekognition", "vision"] as const) {
-      const error = caught(() => providerFor(name, { SMILE_PROVIDER: name }));
-      expect(error).toBeInstanceOf(ProviderError);
-      expect(error).toMatchObject({ kind: "fatal", code: "adapter_unimplemented" });
-      expect(isRetryable(error)).toBe(false);
-    }
+    const rekognition = providerFor("rekognition", {
+      SMILE_PROVIDER: "rekognition",
+      AWS_REGION: "eu-central-1",
+      AWS_ACCESS_KEY_ID: "AKIAEXAMPLE",
+      AWS_SECRET_ACCESS_KEY: "not-a-real-secret",
+    });
+    expect(rekognition.name).toBe("rekognition");
+
+    const missing = caught(() => providerFor("rekognition", { SMILE_PROVIDER: "rekognition" }));
+    expect(missing).toBeInstanceOf(ProviderError);
+    expect(missing).toMatchObject({ kind: "fatal", code: "missing_credentials" });
+    expect(isRetryable(missing)).toBe(false);
+
+    const vision = caught(() => providerFor("vision", { SMILE_PROVIDER: "vision" }));
+    expect(vision).toBeInstanceOf(ProviderError);
+    expect(vision).toMatchObject({ kind: "fatal", code: "adapter_unimplemented" });
+    expect(isRetryable(vision)).toBe(false);
   });
 
   it("T-SCR-17: providerOrder follows plan 6.2", () => {
