@@ -558,7 +558,7 @@ export function Uploader() {
           aria-disabled={busy}
           tabIndex={-1}
           className={[
-            "group relative flex min-h-56 cursor-pointer flex-col items-center justify-center gap-3 overflow-hidden rounded-3xl bg-ink p-8 text-center text-paper ring-1 ring-transparent dark:ring-paper/10",
+            "group relative flex min-h-48 cursor-pointer flex-col items-center justify-center gap-3 overflow-hidden rounded-3xl bg-ink px-6 pt-12 pb-7 text-center sm:min-h-56 sm:p-8 text-paper ring-1 ring-transparent dark:ring-paper/10",
             "transition-[transform,box-shadow] duration-300 ease-out hover:shadow-lift",
             "peer-focus-visible:ring-4 peer-focus-visible:ring-ring/50 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background",
             dragging ? "scale-[1.015] shadow-lift ring-4 ring-lamp" : "",
@@ -568,14 +568,14 @@ export function Uploader() {
           <span
             aria-hidden="true"
             className={[
-              "absolute top-5 left-5 size-3 rounded-full bg-lamp",
+              "absolute top-4 left-4 size-3 sm:top-5 sm:left-5 rounded-full bg-lamp",
               busy ? "opacity-40" : "lamp",
             ].join(" ")}
           />
-          <span className="press inline-flex h-11 items-center rounded-full bg-lamp px-6 text-sm font-bold text-ink group-hover:-translate-y-px">
+          <span className="press inline-flex h-12 w-full max-w-xs items-center justify-center rounded-full bg-lamp px-6 text-base font-bold text-ink group-hover:-translate-y-px sm:h-11 sm:w-auto sm:text-sm">
             {UPLOAD_COPY.choosePhoto}
           </span>
-          <span className="text-base font-medium text-paper/90">
+          <span className="hidden text-base font-medium text-paper/90 pointer-fine:inline">
             {dragging ? UPLOAD_COPY.dropActive : UPLOAD_COPY.dropHint}
           </span>
           <span className="text-sm text-paper/70">

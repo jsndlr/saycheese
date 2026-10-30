@@ -125,14 +125,14 @@ function DetailContent({
   const router = useRouter();
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
+    <div className="mx-auto w-full max-w-6xl px-4 py-5 sm:px-6 sm:py-10">
       <Link
         href="/app"
-        className="press -ml-3 inline-flex items-center rounded-full px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+        className="press -ml-3 inline-flex min-h-11 items-center rounded-full px-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
       >
         ← {IMAGE_DETAIL_COPY.back}
       </Link>
-      <h1 className="mt-4 mb-8 text-4xl font-extrabold sm:text-5xl">
+      <h1 className="mt-3 mb-6 text-3xl font-extrabold sm:mt-4 sm:mb-8 sm:text-5xl">
         {IMAGE_DETAIL_COPY.heading}
       </h1>
 

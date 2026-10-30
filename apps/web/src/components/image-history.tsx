@@ -173,7 +173,7 @@ function PreloadedHistory({
 
   return (
     <section aria-labelledby="history-heading" className="min-w-0">
-      <h2 id="history-heading" className="mb-5 font-display text-3xl font-extrabold">
+      <h2 id="history-heading" className="mb-3 font-display text-3xl font-extrabold sm:mb-5">
         {UPLOAD_COPY.historyHeading}
       </h2>
       {page === null ? null : <HistoryRows images={page.page} live={false} />}
@@ -204,7 +204,7 @@ function LiveHistory({
 
   return (
     <section aria-labelledby="history-heading" className="min-w-0">
-      <h2 id="history-heading" className="mb-5 font-display text-3xl font-extrabold">
+      <h2 id="history-heading" className="mb-3 font-display text-3xl font-extrabold sm:mb-5">
         {UPLOAD_COPY.historyHeading}
       </h2>
 

@@ -61,9 +61,9 @@ export default function SignUpForm({ nextPath }: { nextPath: string }) {
   });
 
   return (
-    <div className="curtain flex flex-1 items-center justify-center px-4 py-12 sm:py-16">
-    <div className="rise w-full max-w-md rounded-3xl bg-card p-7 text-card-foreground shadow-strip sm:p-10">
-      <h1 className="mb-8 text-4xl font-extrabold">Create account</h1>
+    <div className="curtain flex flex-1 items-start justify-center px-4 py-6 sm:items-center sm:py-16">
+    <div className="rise w-full max-w-md rounded-3xl bg-card p-6 text-card-foreground shadow-strip sm:p-10">
+      <h1 className="mb-6 text-3xl font-extrabold sm:mb-8 sm:text-4xl">Create account</h1>
 
       <form
         onSubmit={(event) => {

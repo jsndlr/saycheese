@@ -46,7 +46,7 @@ export default function Home() {
   return (
     <>
       <section className="curtain relative overflow-hidden">
-        <div className="mx-auto grid w-full max-w-6xl items-center gap-12 px-4 py-12 sm:px-6 lg:min-h-[calc(100svh-4rem)] lg:grid-cols-[1.15fr_0.85fr] lg:gap-8 lg:py-8">
+        <div className="mx-auto grid w-full max-w-6xl items-center gap-12 px-4 py-8 sm:px-6 sm:py-12 lg:min-h-[calc(100svh-4rem)] lg:grid-cols-[1.15fr_0.85fr] lg:gap-8 lg:py-8">
           <div className="max-w-xl lg:max-w-none">
             <h1
               className="rise text-[clamp(3rem,8.2vw,6rem)] leading-[0.92] font-extrabold tracking-[-0.035em] text-curtain-foreground"
@@ -85,7 +85,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:py-28">
+      <section className="mx-auto w-full max-w-6xl px-4 py-14 sm:px-6 sm:py-20 lg:py-28">
         <div className="grid gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:gap-20">
           <h2 className="text-4xl leading-[1.02] font-extrabold tracking-tight sm:text-5xl lg:sticky lg:top-28 lg:self-start">
             How a photo becomes a score
@@ -113,7 +113,7 @@ export default function Home() {
       </section>
 
       <section className="border-y border-border bg-muted/60">
-        <div className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 lg:py-20">
+        <div className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 sm:py-16 lg:py-20">
           <h2 className="max-w-xl text-3xl leading-tight font-extrabold tracking-tight sm:text-4xl">
             Straight answers
           </h2>
@@ -129,7 +129,7 @@ export default function Home() {
       </section>
 
       <section className="curtain">
-        <div className="mx-auto flex w-full max-w-6xl flex-col items-start gap-8 px-4 py-20 sm:px-6 md:flex-row md:items-center md:justify-between lg:py-24">
+        <div className="mx-auto flex w-full max-w-6xl flex-col items-start gap-8 px-4 py-14 sm:px-6 sm:py-20 md:flex-row md:items-center md:justify-between lg:py-24">
           <h2 className="max-w-xl text-4xl leading-[0.95] font-extrabold tracking-[-0.03em] text-curtain-foreground sm:text-6xl">
             Your turn in the booth.
           </h2>

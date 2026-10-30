@@ -9,6 +9,7 @@ import { useState } from "react";
 
 import { AuthGate } from "@/components/auth-gate";
 import { ImageHistory } from "@/components/image-history";
+import { UploadDock } from "@/components/upload-dock";
 import { Uploader } from "@/components/uploader";
 import { authClient } from "@/lib/auth-client";
 import { UPLOAD_COPY } from "@/lib/copy";
@@ -29,32 +30,42 @@ function AccountDetails({
   preloadedImages: Preloaded<typeof api.queries.images.list>;
 }) {
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
+    <div className="mx-auto w-full max-w-6xl px-4 pt-5 pb-28 sm:px-6 sm:py-10">
       <h1 className="sr-only">saycheese</h1>
-      <header className="mb-10 flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-muted/70 px-5 py-3.5">
-        <div className="min-w-0">
-          <p className="text-xs text-muted-foreground">{UPLOAD_COPY.signedInAs}</p>
-          <p className="break-words text-sm font-semibold">{email}</p>
-          <p className="text-xs text-muted-foreground">
-            {UPLOAD_COPY.release(release)}
-          </p>
-        </div>
+      <header className="mb-8 rounded-2xl bg-muted/70 px-3 py-2.5 sm:mb-10 sm:px-5 sm:py-3.5">
         <div className="flex items-center gap-3">
+          <span
+            aria-hidden="true"
+            className="grid size-9 shrink-0 place-items-center rounded-full bg-ink font-display text-base font-extrabold text-lamp uppercase sm:hidden"
+          >
+            {email.slice(0, 1)}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="hidden text-xs text-muted-foreground sm:block">{UPLOAD_COPY.signedInAs}</p>
+            <p className="truncate text-sm font-semibold">
+              <span className="sr-only sm:hidden">{UPLOAD_COPY.signedInAs} </span>
+              {email}
+            </p>
+            <p className="hidden text-xs text-muted-foreground sm:block">
+              {UPLOAD_COPY.release(release)}
+            </p>
+          </div>
           <Button type="button" variant="outline" size="sm" onClick={onSignOut}>
             {UPLOAD_COPY.signOut}
           </Button>
-          {signOutError ? (
-            <p role="alert" className="text-sm text-destructive">
-              {signOutError}
-            </p>
-          ) : null}
         </div>
+        {signOutError ? (
+          <p role="alert" className="mt-2 text-sm text-destructive">
+            {signOutError}
+          </p>
+        ) : null}
       </header>
 
-      <div className="grid grid-cols-1 gap-12 min-[900px]:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] min-[900px]:gap-14">
+      <div className="grid grid-cols-1 gap-10 min-[900px]:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] min-[900px]:gap-14">
         <Uploader />
         <ImageHistory preloaded={preloadedImages} next="/app" />
       </div>
+      <UploadDock />
     </div>
   );
 }

@@ -18,12 +18,12 @@ export default function Header() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background">
-      <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-1 px-2 sm:gap-4 sm:px-6">
-        <div className="flex min-w-0 items-center gap-1 sm:gap-8">
+      <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between gap-2 px-4 sm:h-16 sm:gap-4 sm:px-6">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-8">
           <Link
             href="/"
             aria-label="saycheese home"
-            className="press group flex items-center gap-1.5 rounded-full py-1 sm:gap-2.5 sm:pr-2"
+            className="press group flex items-center gap-2 rounded-full py-1 sm:gap-2.5 sm:pr-2"
           >
             <span
               aria-hidden="true"
@@ -40,7 +40,9 @@ export default function Header() {
                   href={to}
                   aria-current={active ? "page" : undefined}
                   className={[
-                    "press relative rounded-full px-2 py-2 transition-colors sm:px-3.5",
+                    "press relative rounded-full px-3.5 py-2 transition-colors",
+                    // The logo already links home, so phones keep one nav pill.
+                    to === "/" ? "hidden sm:inline-flex" : "",
                     active
                       ? "bg-foreground text-background"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground",
