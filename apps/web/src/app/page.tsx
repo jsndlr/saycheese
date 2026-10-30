@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { CSSProperties } from "react";
 
 import { PhotoStrip } from "@/components/photo-strip";
+import { isAuthenticated } from "@/lib/auth-server";
 
 const STEPS = [
   {
@@ -42,7 +43,10 @@ function delay(ms: number): CSSProperties {
 const primaryAction =
   "press inline-flex h-13 items-center rounded-full bg-lamp px-8 text-base font-bold text-ink hover:-translate-y-px hover:shadow-lift focus-visible:outline-curtain-foreground";
 
-export default function Home() {
+export default async function Home() {
+  // Signed-in visitors are past sign-up: send them straight to the booth.
+  const signedIn = await isAuthenticated();
+
   return (
     <>
       <section className="curtain relative overflow-hidden">
@@ -63,15 +67,17 @@ export default function Home() {
               you how we got there.
             </p>
             <div className="rise mt-8 flex flex-wrap items-center gap-3" style={delay(220)}>
-              <Link href="/sign-up" className={primaryAction}>
-                Score my smile
+              <Link href={signedIn ? "/app" : "/sign-up"} className={primaryAction}>
+                {signedIn ? "Open the booth" : "Score my smile"}
               </Link>
-              <Link
-                href="/sign-in"
-                className="press inline-flex h-13 items-center rounded-full px-7 text-base font-semibold text-curtain-foreground ring-1 ring-curtain-foreground/45 hover:bg-curtain-foreground/10 focus-visible:outline-curtain-foreground"
-              >
-                Sign in
-              </Link>
+              {signedIn ? null : (
+                <Link
+                  href="/sign-in"
+                  className="press inline-flex h-13 items-center rounded-full px-7 text-base font-semibold text-curtain-foreground ring-1 ring-curtain-foreground/45 hover:bg-curtain-foreground/10 focus-visible:outline-curtain-foreground"
+                >
+                  Sign in
+                </Link>
+              )}
             </div>
             <p
               className="rise mt-6 max-w-sm text-sm leading-relaxed text-curtain-foreground/85"
@@ -133,8 +139,8 @@ export default function Home() {
           <h2 className="max-w-xl text-4xl leading-[0.95] font-extrabold tracking-[-0.03em] text-curtain-foreground sm:text-6xl">
             Your turn in the booth.
           </h2>
-          <Link href="/sign-up" className={primaryAction}>
-            Score my smile
+          <Link href={signedIn ? "/app" : "/sign-up"} className={primaryAction}>
+            {signedIn ? "Open the booth" : "Score my smile"}
           </Link>
         </div>
       </section>

@@ -508,12 +508,12 @@ export function ScorePanel({
   return (
     <section
       aria-labelledby="score-panel-heading"
-      className="min-w-0 space-y-5 rounded-3xl bg-card p-5 shadow-lift ring-1 ring-foreground/10 sm:p-6"
+      className="min-w-0 space-y-6"
     >
       <p role="status" aria-live="polite" className="sr-only">
         {announcement}
       </p>
-      <h2 id="score-panel-heading" className="font-display text-xl font-extrabold">
+      <h2 id="score-panel-heading" className="sr-only">
         {SCORE_COPY.panelHeading}
       </h2>
 
@@ -523,7 +523,7 @@ export function ScorePanel({
           width={image.width ?? undefined}
           height={image.height ?? undefined}
           alt={SCORE_COPY.previewAlt}
-          className="mx-auto h-auto max-h-[20rem] max-w-full rounded-[3px] border-[10px] border-paper bg-paper object-contain shadow-strip"
+          className="block h-auto w-auto max-h-[24rem] max-w-full rounded-[3px] border-[10px] border-paper bg-paper object-contain shadow-strip"
         />
       ) : null}
 

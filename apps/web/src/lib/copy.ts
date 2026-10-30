@@ -61,6 +61,10 @@ export const IMAGE_DETAIL_COPY = {
   archiveBlocked: "Wait until scoring finishes",
   archivedToast: "Photo archived",
   signIn: "Sign in",
+  theme: "Appearance",
+  themeLight: "Light",
+  themeDark: "Dark",
+  themeSystem: "System",
 } as const;
 
 /** Shared labels for the inline confirm step; both flows must read the same. */
@@ -102,9 +106,17 @@ export const SCORE_COPY = {
   announceConfidence: (percent: number) => `Confidence ${percent} percent.`,
   announceCached: "This is a cached result.",
   signIn: "Sign in",
+  theme: "Appearance",
+  themeLight: "Light",
+  themeDark: "Dark",
+  themeSystem: "System",
 } as const;
 export const USER_MENU_COPY = {
   label: "Account menu",
   photos: "Your photos",
   signIn: "Sign in",
+  theme: "Appearance",
+  themeLight: "Light",
+  themeDark: "Dark",
+  themeSystem: "System",
 } as const;

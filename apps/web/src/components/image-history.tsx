@@ -54,28 +54,45 @@ function chipFor(image: ImageDto): { label: string; tone: ChipTone } {
   return { label: HISTORY_COPY.status.processing, tone: "active" };
 }
 
-/**
- * One `fileUrl` subscription per row. At 12 rows per page this is cheaper than
- * a batched query: Convex deduplicates the websocket traffic, and the rows
- * that have not finished processing resolve to `null` without a second shape.
- * A batch would need its own pagination/argument contract and a second cache
- * entry for the same data.
- */
-function Thumbnail({ id, alt }: { id: ImageDto["id"]; alt: string }) {
-  const file = useQuery(api.queries.images.fileUrl, { id, variant: "thumb" });
+function Thumbnail({ id, alt, score }: { id: ImageDto["id"]; alt: string; score: number | null }) {
+  const file = useQuery(api.queries.images.fileUrl, { id, variant: "preview" });
 
   return (
-    <div className="h-16 w-16 shrink-0 overflow-hidden rounded-[3px] border-[3px] border-paper bg-muted shadow-lift">
-      {file?.url ? (
+    <PrintImage alt={alt} score={score} url={file?.url ?? null} />
+  );
+}
+
+/**
+ * The picture half of a print: a square crop with the score printed in its
+ * corner, the same ink-and-lamp pairing as a frame on the landing strip.
+ */
+function PrintImage({
+  alt,
+  score,
+  url,
+}: {
+  alt: string;
+  score: number | null;
+  url: string | null;
+}) {
+  return (
+    <div className="relative aspect-square overflow-hidden rounded-[2px] bg-muted">
+      {url ? (
         <img
-          src={file.url}
-          width={64}
-          height={64}
+          src={url}
+          width={256}
+          height={256}
           alt={alt}
           loading="lazy"
           decoding="async"
-          className="h-full w-full object-cover"
+          className="size-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04] motion-reduce:transition-none"
         />
+      ) : null}
+      {score !== null ? (
+        <span className="num absolute bottom-2 left-2 rounded-[3px] bg-ink px-2 py-1 font-display text-2xl leading-none font-extrabold text-lamp">
+          {score}
+          <span className="sr-only"> {SCORE_COPY.scoreSuffix}</span>
+        </span>
       ) : null}
     </div>
   );
@@ -83,27 +100,28 @@ function Thumbnail({ id, alt }: { id: ImageDto["id"]; alt: string }) {
 
 /**
  * `live` is false only for the server/preloaded branch, which must not open a
- * `fileUrl` subscription before auth resolves. The 64x64 box is still reserved,
- * so the thumbnail arriving later cannot shift the row.
+ * `fileUrl` subscription before auth resolves. The square is still reserved, so
+ * the picture arriving later cannot shift the print.
  */
 function HistoryRow({ image, live }: { image: ImageDto; live: boolean }) {
   const uploaded = useTimeLabel(image.createdAt, "relative");
   const chip = chipFor(image);
   const score = image.score;
+  const value = score?.score ?? null;
 
   return (
     <li>
       <Link
         href={`/app/images/${image.id}` as Route}
-        className="press group flex items-center gap-4 rounded-2xl px-3 py-3 hover:bg-muted"
+        className="press group block rounded-[3px] bg-card p-2 pb-3 shadow-lift transition-[transform,box-shadow] duration-300 ease-out hover:-translate-y-0.5 focus-visible:ring-4 focus-visible:ring-ring/50 focus-visible:outline-none"
       >
         {live ? (
-          <Thumbnail id={image.id} alt={HISTORY_COPY.thumbnailAlt(uploaded)} />
+          <Thumbnail id={image.id} alt={HISTORY_COPY.thumbnailAlt(uploaded)} score={value} />
         ) : (
-          <div className="h-16 w-16 shrink-0 rounded-[3px] border-[3px] border-paper bg-muted shadow-lift" />
+          <PrintImage alt="" score={value} url={null} />
         )}
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="mt-2.5 space-y-1.5 px-1">
+          <div className="flex flex-wrap items-center gap-1.5">
             <span
               className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${CHIP_TONES[chip.tone]}`}
             >
@@ -118,15 +136,9 @@ function HistoryRow({ image, live }: { image: ImageDto; live: boolean }) {
           <LocalTime
             value={image.createdAt}
             mode="relative"
-            className="mt-1.5 block text-sm text-muted-foreground"
+            className="block text-sm text-muted-foreground"
           />
         </div>
-        {score?.score != null ? (
-          <span className="num font-display text-4xl leading-none font-extrabold text-primary-text transition-transform duration-300 ease-out group-hover:scale-105">
-            {score.score}
-            <span className="sr-only"> {SCORE_COPY.scoreSuffix}</span>
-          </span>
-        ) : null}
       </Link>
     </li>
   );
@@ -134,22 +146,21 @@ function HistoryRow({ image, live }: { image: ImageDto; live: boolean }) {
 
 function SkeletonRow() {
   return (
-    <li
-      aria-hidden="true"
-      className="flex items-center gap-4 px-3 py-3 motion-safe:animate-pulse"
-    >
-      <div className="h-16 w-16 shrink-0 rounded-[3px] bg-muted" />
-      <div className="flex-1 space-y-2.5">
-        <div className="h-5 w-24 rounded-full bg-muted" />
-        <div className="h-3.5 w-16 rounded-full bg-muted" />
+    <li aria-hidden="true" className="rounded-[3px] bg-card p-2 pb-3 shadow-lift motion-safe:animate-pulse">
+      <div className="aspect-square rounded-[2px] bg-muted" />
+      <div className="mt-2.5 space-y-2 px-1">
+        <div className="h-5 w-20 rounded-full bg-muted" />
+        <div className="h-3.5 w-14 rounded-full bg-muted" />
       </div>
     </li>
   );
 }
 
+const GRID = "grid grid-cols-2 gap-3.5 sm:grid-cols-3 sm:gap-5 min-[900px]:grid-cols-2 min-[1180px]:grid-cols-3";
+
 function HistoryRows({ images, live }: { images: ImageDto[]; live: boolean }) {
   return (
-    <ul className="-mx-3 space-y-1">
+    <ul className={GRID}>
       {images.map((image) => (
         <HistoryRow key={image.id} image={image} live={live} />
       ))}
@@ -213,7 +224,7 @@ function LiveHistory({
           <p role="status" className="sr-only">
             {HISTORY_COPY.loading}
           </p>
-          <ul aria-busy="true">
+          <ul aria-busy="true" className={GRID}>
             <SkeletonRow />
             <SkeletonRow />
             <SkeletonRow />

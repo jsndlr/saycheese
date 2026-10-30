@@ -143,7 +143,7 @@ function DetailContent({
           onChangeFile={() => router.push("/app")}
         />
 
-        <div className="space-y-6 self-start rounded-3xl bg-muted/60 p-5 sm:p-6">
+        <div className="space-y-6 self-start border-t border-border pt-6 min-[900px]:border-t-0 min-[900px]:border-l min-[900px]:pt-0 min-[900px]:pl-10">
           <dl className="divide-y divide-border text-sm">
             <div className="pb-3">
               <dt className="text-xs font-medium text-muted-foreground">

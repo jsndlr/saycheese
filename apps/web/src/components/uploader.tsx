@@ -519,7 +519,7 @@ export function Uploader() {
         <h2 id="uploader-heading" className="font-display text-3xl font-extrabold">
           {UPLOAD_COPY.heading}
         </h2>
-        <p className="max-w-md text-muted-foreground">{UPLOAD_COPY.intro}</p>
+        <p className="max-w-md text-pretty text-muted-foreground">{UPLOAD_COPY.intro}</p>
       </div>
 
       <div

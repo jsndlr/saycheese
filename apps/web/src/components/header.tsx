@@ -2,7 +2,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { ModeToggle } from "./mode-toggle";
 import { UserMenu } from "./user-menu";
 
 const links = [
@@ -53,10 +52,7 @@ export default function Header() {
             })}
           </nav>
         </div>
-        <div className="flex items-center gap-2">
-          <ModeToggle />
-          <UserMenu />
-        </div>
+        <UserMenu />
       </div>
     </header>
   );

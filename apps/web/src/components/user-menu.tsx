@@ -7,21 +7,32 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@saycheese/ui/components/dropdown-menu";
 import { useConvexAuth, useQuery } from "convex/react";
 import Link from "next/link";
+import { useTheme } from "next-themes";
 import { useEffect } from "react";
 import { toast } from "sonner";
 
+import { ModeToggle } from "@/components/mode-toggle";
 import { UPLOAD_COPY, USER_MENU_COPY } from "@/lib/copy";
 import { resetSigningOut, signOutUser, useSigningOut } from "@/lib/sign-out";
 
 const buttonClass =
-  "press grid size-10 shrink-0 place-items-center rounded-full bg-ink font-display text-base font-extrabold text-lamp uppercase focus-visible:ring-4 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none";
+  "press grid size-10 shrink-0 place-items-center rounded-full bg-ink font-display text-base font-extrabold text-lamp uppercase ring-1 ring-foreground/10 dark:ring-paper/30 focus-visible:ring-4 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none";
+
+const THEMES = [
+  { value: "light", label: USER_MENU_COPY.themeLight },
+  { value: "dark", label: USER_MENU_COPY.themeDark },
+  { value: "system", label: USER_MENU_COPY.themeSystem },
+] as const;
 
 function SignedInMenu() {
+  const { theme, setTheme } = useTheme();
   const signingOut = useSigningOut();
   // Suspended while signing out, like the page's own subscriptions, so deleting
   // the session cannot re-run it unauthenticated.
@@ -56,6 +67,18 @@ function SignedInMenu() {
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem render={<Link href="/app" />} className="min-h-11">{USER_MENU_COPY.photos}</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>{USER_MENU_COPY.theme}</DropdownMenuLabel>
+          <DropdownMenuRadioGroup value={theme ?? "system"} onValueChange={setTheme}>
+            {THEMES.map(({ value, label }) => (
+              <DropdownMenuRadioItem key={value} value={value} className="min-h-11">
+                {label}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" className="min-h-11" onClick={() => void handleSignOut()}>
           {UPLOAD_COPY.signOut}
         </DropdownMenuItem>
@@ -81,13 +104,17 @@ export function UserMenu() {
     return <span aria-hidden="true" className="size-10 shrink-0 rounded-full bg-muted" />;
   }
   if (!isAuthenticated) {
+    // No account menu to hold the theme choice, so signed-out visitors keep a toggle.
     return (
-      <Link
-        href="/sign-in"
-        className="press inline-flex h-10 shrink-0 items-center rounded-full bg-foreground px-4 text-sm font-semibold text-background"
-      >
-        {USER_MENU_COPY.signIn}
-      </Link>
+      <div className="flex items-center gap-2">
+        <ModeToggle />
+        <Link
+          href="/sign-in"
+          className="press inline-flex h-10 shrink-0 items-center rounded-full bg-foreground px-4 text-sm font-semibold text-background"
+        >
+          {USER_MENU_COPY.signIn}
+        </Link>
+      </div>
     );
   }
   return <SignedInMenu />;
