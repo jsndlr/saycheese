@@ -1,15 +1,30 @@
 # saycheese
 
-This project was created with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack), a modern TypeScript stack that combines Next.js, Convex, and more.
+Upload a photo and get a 0 to 100 smile score. Signed-in users upload JPEG, PNG or WebP images, the backend validates and normalises them, a vision provider finds the faces, and the score, history and detail views update live.
+
+Live: https://saycheese-five.vercel.app
+
+Scaffolded with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack).
 
 ## Features
 
-- **TypeScript** - For type safety and improved developer experience
-- **Next.js** - Full-stack React framework
-- **TailwindCSS** - Utility-first CSS for rapid UI development
-- **Shared UI package** - shadcn/ui primitives live in `packages/ui`
-- **Convex** - Reactive backend-as-a-service platform
-- **Authentication** - Better-Auth
+- **Next.js** (App Router) web app in `apps/web`, TailwindCSS, shadcn/ui primitives in `packages/ui`
+- **Convex** backend in `packages/backend`: reactive queries, file storage, scoring actions queued through a workpool, scheduled cleanup sweeps
+- **Better Auth** email/password sign-in through the Convex adapter
+- **Smile scoring** behind a provider interface: DeepSeek vision model in production, a deterministic stub by default, AWS Rekognition and Google Cloud Vision as optional adapters (see [Smile scoring providers](#smile-scoring-providers))
+- **Shared rules** in `packages/core`: scoring, validation and error codes used by both web and backend
+- **Vitest** suites in every package
+
+## Quick start
+
+```bash
+pnpm install
+pnpm dev:setup   # first time: link a Convex dev deployment
+pnpm dev         # Convex + Next.js, app at http://localhost:3001
+pnpm seed        # demo account demo@saycheese.dev / saycheese-demo-2026 (dev deployments only)
+pnpm test        # Vitest in every package
+pnpm check       # lint + typecheck
+```
 
 ## Supported images
 
@@ -136,7 +151,16 @@ Plan 6.3 uses `@convex-dev/rate-limiter` (`packages/backend/convex/lib/rateLimit
 
 ## Smile scoring providers
 
-### DeepSeek (vision model, no AWS or Google account)
+`SMILE_PROVIDER` picks the provider. Every adapter returns the same face description and `packages/core` turns it into the score, so switching providers changes no scoring rules.
+
+| Provider | `SMILE_PROVIDER` | Used for |
+| --- | --- | --- |
+| DeepSeek vision model | `deepseek` | Production |
+| Deterministic stub | `stub` (default) | Local development and tests; no network or credentials |
+| AWS Rekognition | `rekognition` | Optional adapter, with Vision as fallback; not deployed |
+| Google Cloud Vision | `vision` | Optional adapter; not deployed |
+
+### DeepSeek (production)
 
 ```
 SMILE_PROVIDER=deepseek
@@ -148,9 +172,9 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com   # optional: any OpenAI-compatible e
 A multimodal chat model is asked for a strict JSON description of each face (area, smiling, confidences, sharpness); the reply is validated and clamped, and core owns the scoring rules. It runs with `temperature: 0` and thinking disabled (about 2 s instead of 6 s on a reseller that returns reasoning). There is no fallback provider in this mode. The model's judgement is not a measurement, so treat scores as a fun estimate; `DEEPSEEK_COST_MICROS_PER_IMAGE` is a labelled placeholder, not a verified price.
 
 Verified 2026-10-30 against Refuseless (`https://api.refuseless.com/v1`, model `deepseek-v4.1-flash-fast`): a smiling portrait scored 97, a plain image returned no faces.
+### AWS Rekognition (optional)
 
-
-The repository defaults to the deterministic stub (`SMILE_PROVIDER=stub`); it needs no network or credentials. AWS Rekognition is opt-in:
+Not used in production. Kept as a tested adapter for deployments that prefer a managed face-detection API:
 
 ```bash
 SMILE_PROVIDER=rekognition
@@ -176,9 +200,9 @@ The backend validates these keys at module load (`packages/backend/convex/env.ts
 
 Costs use `REKOGNITION_COST_MICROS_PER_IMAGE` in `packages/backend/convex/lib/providers/rekognition.ts`. The current value (1,000 micros = $0.001 per image) is a **labelled placeholder assumption, not a verified price**; confirm the DetectFaces list price for the deployment region in the AWS console before relying on `costMicros`. Scoring reads the stored WebP variant and converts it in memory to JPEG (quality 90, metadata stripped) before calling Rekognition, so the scoring action runs in Convex's Node runtime; Rekognition itself is signed with `aws4fetch`.
 
-### Google Cloud Vision
+### Google Cloud Vision (optional)
 
-Vision is opt-in and needs a service-account JSON holding `client_email`, `private_key` (PKCS#8 PEM) and optionally `token_uri`. Put the JSON (the whole file, as one value) in:
+Not used in production. Vision is opt-in and needs a service-account JSON holding `client_email`, `private_key` (PKCS#8 PEM) and optionally `token_uri`. Put the JSON (the whole file, as one value) in:
 
 ```bash
 SMILE_PROVIDER=vision
@@ -196,7 +220,7 @@ For the Rekognition-primary fallback the same variable is optional; without it t
 
 ### Fallback rules
 
-With `SMILE_PROVIDER=rekognition` the order is Rekognition then Vision:
+Only the Rekognition mode has a fallback; DeepSeek, Vision and the stub run alone. With `SMILE_PROVIDER=rekognition` the order is Rekognition then Vision:
 
 - The primary gets its normal single retry. If it ends in a retryable error or timeout, Vision gets one attempt within the same 10 s budget. Vision may retry once only when a full per-call timeout still fits after the retry wait.
 - Fatal primary failures — bad credentials, invalid image, permission denied — do **not** fall back. A primary that cannot be constructed is recorded `unavailable` rather than silently routed to Vision; a misconfigured deployment must be visible.
