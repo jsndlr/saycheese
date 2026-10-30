@@ -3,25 +3,31 @@
 import { api } from "@saycheese/backend/convex/_generated/api";
 import type { Preloaded } from "convex/react";
 
+import { useEffect } from "react";
+
 import { AuthGate } from "@/components/auth-gate";
 import { ImageHistory } from "@/components/image-history";
 import { UploadDock } from "@/components/upload-dock";
 import { Uploader } from "@/components/uploader";
+import { scrollToPhotos } from "@/lib/photos";
 
 function AppContent({
   preloadedImages,
 }: {
   preloadedImages: Preloaded<typeof api.queries.images.list>;
 }) {
+  useEffect(() => {
+    // A direct or cross-route `/app#photos` link must land on the collection
+    // and leave focus there, not just change the URL.
+    if (window.location.hash === "#photos") {
+      scrollToPhotos("auto");
+    }
+  }, []);
+
   return (
     <div className="mx-auto w-full max-w-6xl px-4 pt-6 pb-28 sm:px-6 sm:py-10">
-      <h1 className="sr-only">saycheese</h1>
-      <div className="grid grid-cols-1 gap-10 min-[900px]:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] min-[900px]:gap-14">
-        <div className="min-w-0 min-[900px]:sticky min-[900px]:top-24 min-[900px]:self-start">
-          <Uploader />
-        </div>
-        <ImageHistory preloaded={preloadedImages} next="/app" />
-      </div>
+      <Uploader />
+      <ImageHistory preloaded={preloadedImages} next="/app" />
       <UploadDock />
     </div>
   );

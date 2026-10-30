@@ -15,14 +15,13 @@ export const UPLOAD_COPY = {
   uploadingPercent: (percent: number) => `Uploading ${percent}%`,
   deduplicated: "You already uploaded this photo",
   resultLoading: "Loading your result…",
-  historyHeading: "Your history",
+  historyHeading: "Your photos",
   signedInAs: "Signed in as",
   signOut: "Sign out",
   retry: "Try again",
   cancel: "Cancel",
   changeFile: "Choose another photo",
   signIn: "Sign in",
-  release: (release: string) => `Scoring config release ${release}`,
 } as const;
 
 export const HISTORY_COPY = {

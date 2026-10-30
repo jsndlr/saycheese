@@ -232,6 +232,7 @@ function LiveScore({
       image={image}
       previewUrl={preview?.url ?? null}
       onChangeFile={onChangeFile}
+      compact
     />
   );
 }
@@ -456,6 +457,13 @@ export function Uploader() {
     }
   }
 
+  function handlePanelClick(event: React.MouseEvent<HTMLDivElement>) {
+    if (busy || (event.target as HTMLElement).closest("label") !== null) {
+      return;
+    }
+    openFilePicker();
+  }
+
   function errorAction() {
     if (error === null) {
       return null;
@@ -514,14 +522,7 @@ export function Uploader() {
         : UPLOAD_COPY.uploadingPercent(progress);
 
   return (
-    <section aria-labelledby="uploader-heading" className="min-w-0 space-y-5">
-      <div className="space-y-2">
-        <h2 id="uploader-heading" className="font-display text-3xl font-extrabold">
-          {UPLOAD_COPY.heading}
-        </h2>
-        <p className="max-w-md text-pretty text-muted-foreground">{UPLOAD_COPY.intro}</p>
-      </div>
-
+    <section aria-labelledby="uploader-heading" className="min-w-0">
       <div
         onDragEnter={(event) => {
           event.preventDefault();
@@ -552,40 +553,61 @@ export function Uploader() {
           onChange={handleFileInput}
           className="peer sr-only"
         />
-        <label
-          ref={labelRef}
-          htmlFor="photo-upload"
-          aria-disabled={busy}
-          tabIndex={-1}
+        <div
+          onClick={handlePanelClick}
           className={[
-            "group relative flex min-h-48 cursor-pointer flex-col items-center justify-center gap-3 overflow-hidden rounded-3xl bg-ink px-6 pt-12 pb-7 text-center sm:min-h-56 sm:p-8 text-paper ring-1 ring-transparent dark:ring-paper/10",
-            "transition-[transform,box-shadow] duration-300 ease-out hover:shadow-lift",
+            "group relative flex cursor-pointer flex-col gap-5 overflow-hidden rounded-3xl bg-ink p-5 text-paper ring-1 ring-transparent transition-[transform,box-shadow] duration-300 ease-out hover:shadow-lift dark:ring-paper/10 sm:flex-row sm:items-center sm:justify-between sm:gap-8 sm:p-6",
             "peer-focus-visible:ring-4 peer-focus-visible:ring-ring/50 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background",
-            dragging ? "scale-[1.015] shadow-lift ring-4 ring-lamp" : "",
+            dragging ? "scale-[1.01] shadow-lift ring-4 ring-lamp" : "",
             busy ? "cursor-not-allowed opacity-60" : "",
           ].join(" ")}
         >
-          <span
-            aria-hidden="true"
-            className={[
-              "absolute top-4 left-4 size-3 sm:top-5 sm:left-5 rounded-full bg-lamp",
-              busy ? "opacity-40" : "lamp",
-            ].join(" ")}
-          />
-          <span className="press inline-flex h-12 w-full max-w-xs items-center justify-center rounded-full bg-lamp px-6 text-base font-bold text-ink group-hover:-translate-y-px sm:h-11 sm:w-auto sm:text-sm">
-            {UPLOAD_COPY.choosePhoto}
-          </span>
-          <span className="hidden text-base font-medium text-paper/90 pointer-fine:inline">
-            {dragging ? UPLOAD_COPY.dropActive : UPLOAD_COPY.dropHint}
-          </span>
-          <span className="text-sm text-paper/70">
-            {UPLOAD_COPY.formats}
-          </span>
-        </label>
+          <div className="min-w-0 space-y-1.5 sm:max-w-xl">
+            <div className="flex items-center gap-3">
+              <span
+                aria-hidden="true"
+                className={[
+                  "size-3 shrink-0 rounded-full bg-lamp",
+                  busy ? "opacity-40" : "lamp",
+                ].join(" ")}
+              />
+              <h1
+                id="uploader-heading"
+                className="font-display text-2xl font-extrabold text-paper sm:text-3xl"
+              >
+                {UPLOAD_COPY.heading}
+              </h1>
+            </div>
+            <p className="max-w-md pl-6 text-sm text-paper/75 sm:text-base">
+              {UPLOAD_COPY.intro}
+            </p>
+          </div>
+
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:shrink-0 sm:items-end sm:text-right">
+            <label
+              ref={labelRef}
+              htmlFor="photo-upload"
+              aria-disabled={busy}
+              tabIndex={-1}
+              className={[
+                "press inline-flex h-12 w-full cursor-pointer items-center justify-center rounded-full bg-lamp px-6 text-base font-bold text-ink group-hover:-translate-y-px sm:h-11 sm:w-auto sm:text-sm",
+                busy ? "cursor-not-allowed" : "",
+              ].join(" ")}
+            >
+              {UPLOAD_COPY.choosePhoto}
+            </label>
+            <span className="hidden text-sm text-paper/75 pointer-fine:inline">
+              {dragging ? UPLOAD_COPY.dropActive : UPLOAD_COPY.dropHint}
+            </span>
+            <span className="text-xs text-paper/70 sm:text-sm">
+              {UPLOAD_COPY.formats}
+            </span>
+          </div>
+        </div>
       </div>
 
       {busy ? (
-        <div className="space-y-2">
+        <div className="mt-4 space-y-2">
           <div className="space-y-2" role="status" aria-live="polite">
             <p className="text-sm">{progressLabel}</p>
             {phase === "uploading" ? (
@@ -604,7 +626,7 @@ export function Uploader() {
               </div>
             ) : null}
           </div>
-          <Button type="button" variant="outline" onClick={cancel}>
+          <Button type="button" variant="outline" size="sm" onClick={cancel}>
             {UPLOAD_COPY.cancel}
           </Button>
         </div>
@@ -613,7 +635,7 @@ export function Uploader() {
       {error !== null ? (
         <div
           role="alert"
-          className="space-y-3 rounded-2xl border border-destructive/30 bg-destructive/8 p-4"
+          className="mt-4 space-y-3 rounded-2xl border border-destructive/30 bg-destructive/8 p-4"
         >
           <p className="text-sm text-destructive">{error.message}</p>
           {errorAction()}
@@ -621,7 +643,7 @@ export function Uploader() {
       ) : null}
 
       {imageId !== null ? (
-        <div className="space-y-3">
+        <div className="mt-4 space-y-3 rounded-2xl border border-border bg-card p-4 shadow-lift sm:p-5">
           {deduplicated ? (
             <p role="status" className="text-sm">
               {UPLOAD_COPY.deduplicated}

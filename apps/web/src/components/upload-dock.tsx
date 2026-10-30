@@ -41,8 +41,7 @@ export function UploadDock() {
       aria-hidden={!visible}
       inert={!visible}
       className={[
-        "fixed inset-x-0 bottom-0 z-30 px-4 pt-6 pb-[max(1rem,env(safe-area-inset-bottom))] sm:hidden",
-        "bg-gradient-to-t from-background via-background/90 to-transparent",
+        "fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:hidden",
         "transition-[transform,opacity] duration-300 ease-out motion-reduce:transition-none",
         visible ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-6 opacity-0",
       ].join(" ")}

@@ -8,6 +8,7 @@ import type { Preloaded } from "convex/react";
 import { usePaginatedQuery, useQuery } from "convex/react";
 import type { Route } from "next";
 import Link from "next/link";
+import { useEffect, useRef } from "react";
 
 import { AuthGate } from "@/components/auth-gate";
 import { LocalTime, useTimeLabel } from "@/components/local-time";
@@ -156,7 +157,8 @@ function SkeletonRow() {
   );
 }
 
-const GRID = "grid grid-cols-2 gap-3.5 sm:grid-cols-3 sm:gap-5 min-[900px]:grid-cols-2 min-[1180px]:grid-cols-3";
+const GRID =
+  "grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:gap-4 md:grid-cols-3 lg:grid-cols-4 lg:gap-5 xl:grid-cols-5";
 
 function HistoryRows({ images, live }: { images: ImageDto[]; live: boolean }) {
   return (
@@ -165,6 +167,49 @@ function HistoryRows({ images, live }: { images: ImageDto[]; live: boolean }) {
         <HistoryRow key={image.id} image={image} live={live} />
       ))}
     </ul>
+  );
+}
+
+/** The `#photos` destination: a focusable heading with sticky-header scroll margin. */
+function HistoryHeading() {
+  const ref = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => {
+    // The preloaded and live lists each render their own heading, so the auth
+    // handover replaces the element a `#photos` arrival focused. Take focus back
+    // only when it fell to the body, never from something the user chose.
+    const active = document.activeElement;
+    if (window.location.hash === "#photos" && (active === null || active === document.body)) {
+      ref.current?.focus({ preventScroll: true });
+    }
+  }, []);
+
+  return (
+    <div className="mb-4 flex items-center gap-4 sm:mb-5">
+      <h2
+        ref={ref}
+        id="photos"
+        tabIndex={-1}
+        className="scroll-mt-20 font-display text-2xl font-extrabold sm:scroll-mt-24 sm:text-3xl"
+      >
+        {UPLOAD_COPY.historyHeading}
+      </h2>
+      <span aria-hidden="true" className="h-px min-w-6 flex-1 bg-border" />
+    </div>
+  );
+}
+
+function EmptyHistory() {
+  return (
+    <div className="flex max-w-2xl flex-col items-start gap-4 rounded-2xl border border-dashed border-input bg-muted/40 p-5 sm:flex-row sm:items-center sm:gap-5 sm:p-6">
+      <div
+        aria-hidden="true"
+        className="aspect-[5/3] w-20 shrink-0 rounded-[3px] border-[3px] border-paper bg-ink shadow-lift"
+      />
+      <p className="text-sm text-muted-foreground sm:text-base">
+        {HISTORY_COPY.empty}
+      </p>
+    </div>
   );
 }
 
@@ -183,10 +228,8 @@ function PreloadedHistory({
       : preloadedQueryResult(preloaded);
 
   return (
-    <section aria-labelledby="history-heading" className="min-w-0">
-      <h2 id="history-heading" className="mb-3 font-display text-3xl font-extrabold sm:mb-5">
-        {UPLOAD_COPY.historyHeading}
-      </h2>
+    <section aria-labelledby="photos" className="mt-10 min-w-0 sm:mt-14">
+      <HistoryHeading />
       {page === null ? null : <HistoryRows images={page.page} live={false} />}
     </section>
   );
@@ -214,10 +257,8 @@ function LiveHistory({
   const images = loadingFirstPage && preloadedPage ? preloadedPage.page : results;
 
   return (
-    <section aria-labelledby="history-heading" className="min-w-0">
-      <h2 id="history-heading" className="mb-3 font-display text-3xl font-extrabold sm:mb-5">
-        {UPLOAD_COPY.historyHeading}
-      </h2>
+    <section aria-labelledby="photos" className="mt-10 min-w-0 sm:mt-14">
+      <HistoryHeading />
 
       {loadingFirstPage && images.length === 0 ? (
         <>
@@ -231,13 +272,7 @@ function LiveHistory({
           </ul>
         </>
       ) : images.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-input bg-muted/50 p-8 text-center text-muted-foreground">
-          <div
-            aria-hidden="true"
-            className="mx-auto mb-5 aspect-[5/3] w-28 rounded-[3px] border-[3px] border-paper bg-ink shadow-lift"
-          />
-          {HISTORY_COPY.empty}
-        </div>
+        <EmptyHistory />
       ) : (
         <>
           <HistoryRows images={images} live />

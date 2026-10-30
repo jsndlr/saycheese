@@ -7,6 +7,7 @@ import { ConvexError } from "convex/values";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { IMAGE_DETAIL_COPY } from "@/lib/copy";
+import { PHOTOS_HREF } from "@/lib/photos";
 
 import ImageDetail from "./image-detail";
 
@@ -106,7 +107,7 @@ describe("ImageDetail archive", () => {
     try {
       view.rerender(<ImageDetail preloaded={{} as never} preloadedOriginal={{} as never} next="/app/images/image-1" />);
       expect(screen.getByText(IMAGE_DETAIL_COPY.notFoundHeading)).toBeTruthy();
-      expect(screen.getByRole("link", { name: IMAGE_DETAIL_COPY.back }).getAttribute("href")).toBe("/app");
+      expect(screen.getByRole("link", { name: IMAGE_DETAIL_COPY.back }).getAttribute("href")).toBe(PHOTOS_HREF);
       expect(screen.queryByRole("button", { name: IMAGE_DETAIL_COPY.archive })).toBeNull();
     } finally {
       consoleError.mockRestore();
@@ -126,7 +127,7 @@ describe("ImageDetail archive", () => {
 
     expect(archive).toHaveBeenCalledOnce();
     expect(archive).toHaveBeenCalledWith({ id: "image-1" });
-    expect(push).toHaveBeenCalledWith("/app");
+    expect(push).toHaveBeenCalledWith(PHOTOS_HREF);
     expect(success).toHaveBeenCalledWith(IMAGE_DETAIL_COPY.archivedToast);
   });
 
@@ -143,7 +144,7 @@ describe("ImageDetail archive", () => {
     expect(screen.getByText(IMAGE_DETAIL_COPY.heading)).toBeTruthy();
     expect(vi.mocked(useQuery).mock.calls.slice(-2).map((call) => call[1])).toEqual(["skip", "skip"]);
     await act(async () => pending.resolve({ id: "image-1" }));
-    expect(push).toHaveBeenCalledWith("/app");
+    expect(push).toHaveBeenCalledWith(PHOTOS_HREF);
     expect(vi.mocked(useQuery).mock.calls.slice(-2).map((call) => call[1])).toEqual(["skip", "skip"]);
   });
   it("cancels without calling the mutation", () => {
@@ -201,7 +202,7 @@ describe("ImageDetail archive", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
     await act(async () => {});
 
-    expect(push).toHaveBeenCalledWith("/app");
+    expect(push).toHaveBeenCalledWith(PHOTOS_HREF);
     expect(success).toHaveBeenCalledWith(IMAGE_DETAIL_COPY.archivedToast);
     expect(screen.queryByRole("alert")).toBeNull();
   });

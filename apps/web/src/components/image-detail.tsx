@@ -20,6 +20,7 @@ import { signInPath } from "@/lib/auth-path";
 import { IMAGE_DETAIL_COPY } from "@/lib/copy";
 import { toUiError, type UiError } from "@/lib/errors";
 import { isImageNotFoundError } from "@/lib/image-not-found";
+import { PHOTOS_HREF } from "@/lib/photos";
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) {
@@ -64,14 +65,14 @@ function ArchiveAction({
       // Convex can publish NOT_FOUND before the mutation promise resolves.
       flushSync(() => suspend?.(true));
       await archive({ id: image.id });
-      router.push("/app");
+      router.push(PHOTOS_HREF);
       toast.success(IMAGE_DETAIL_COPY.archivedToast);
     } catch (cause) {
       const failure = toUiError(cause);
       // A retry after a lost response finds the row already archived. That is
       // the outcome the caller asked for, not an error.
       if (failure.code === "NOT_FOUND") {
-        router.push("/app");
+        router.push(PHOTOS_HREF);
         toast.success(IMAGE_DETAIL_COPY.archivedToast);
         return;
       }
@@ -127,7 +128,7 @@ function DetailContent({
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-5 sm:px-6 sm:py-10">
       <Link
-        href="/app"
+        href={PHOTOS_HREF}
         className="press -ml-3 inline-flex min-h-11 items-center rounded-full px-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
       >
         ← {IMAGE_DETAIL_COPY.back}

@@ -2,19 +2,18 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { USER_MENU_COPY } from "@/lib/copy";
+import { PHOTOS_HREF, handlePhotosLinkClick } from "@/lib/photos";
+
 import { UserMenu } from "./user-menu";
 
-const links = [
-  { to: "/", label: "Home" },
-  { to: "/app", label: "App" },
-] as const;
-
 function isActive(pathname: string, to: string) {
-  return to === "/" ? pathname === "/" : pathname === to || pathname.startsWith(`${to}/`);
+  return pathname === to || pathname.startsWith(`${to}/`);
 }
 
 export default function Header() {
   const pathname = usePathname();
+  const photosActive = isActive(pathname, "/app");
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background">
@@ -23,7 +22,7 @@ export default function Header() {
           <Link
             href="/"
             aria-label="saycheese home"
-            className="press group flex items-center gap-2 rounded-full py-1 sm:gap-2.5 sm:pr-2"
+            className="press group flex min-h-11 items-center gap-2 rounded-full py-1 sm:gap-2.5 sm:pr-2"
           >
             <span
               aria-hidden="true"
@@ -32,24 +31,19 @@ export default function Header() {
             <span className="font-display text-xl font-extrabold tracking-tight">saycheese</span>
           </Link>
           <nav aria-label="Main" className="hidden items-center gap-1 text-sm font-medium sm:flex">
-            {links.map(({ to, label }) => {
-              const active = isActive(pathname, to);
-              return (
-                <Link
-                  key={to}
-                  href={to}
-                  aria-current={active ? "page" : undefined}
-                  className={[
-                    "press relative rounded-full px-3.5 py-2 transition-colors",
-                    active
-                      ? "bg-foreground text-background"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                  ].join(" ")}
-                >
-                  {label}
-                </Link>
-              );
-            })}
+            <Link
+              href={PHOTOS_HREF}
+              aria-current={photosActive ? "page" : undefined}
+              onClick={(event) => handlePhotosLinkClick(pathname, event)}
+              className={[
+                "press relative inline-flex min-h-11 items-center rounded-full px-3.5 py-2 transition-colors",
+                photosActive
+                  ? "bg-foreground text-background"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
+              ].join(" ")}
+            >
+              {USER_MENU_COPY.photos}
+            </Link>
           </nav>
         </div>
         <UserMenu />

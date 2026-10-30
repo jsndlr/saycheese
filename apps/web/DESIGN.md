@@ -134,7 +134,7 @@ A saturated curtain red, a near-black ink, flash-white paper, and one lamp yello
 
 ## Layout
 
-A centered 72rem container (`max-w-6xl`) with 1rem phone gutters and 1.5rem from 640px. The landing is full-bleed bands (curtain, paper, muted paper, curtain). The app screen is two columns from 900px (uploader and score on the left, history on the right) and one column below. Vertical rhythm is generous between sections (5 to 7rem on the landing, 2.5rem on app screens) and tight inside groups (0.5 to 1rem).
+A centered 72rem container (`max-w-6xl`) with 1rem phone gutters and 1.5rem from 640px. The landing is full-bleed bands (curtain, paper, muted paper, curtain). The app screen is one workspace: a compact full-width ink slot for the upload introduction and action, then a full-width collection of printed photos at roughly 200–240px (two columns on phones, one at 320px, up to five on wide desktop). Vertical rhythm is generous between sections (5 to 7rem on the landing, 2.5rem on app screens) and tight inside groups (0.5 to 1rem).
 
 ## Elevation & Depth
 

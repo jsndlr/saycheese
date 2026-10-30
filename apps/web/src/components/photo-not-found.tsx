@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { IMAGE_DETAIL_COPY } from "@/lib/copy";
+import { PHOTOS_HREF } from "@/lib/photos";
 
 /**
  * One rendering of "this photo is gone" for both entry points: the route's
@@ -15,7 +16,7 @@ export function PhotoNotFound() {
       </h1>
       <p className="mb-6 text-muted-foreground">{IMAGE_DETAIL_COPY.notFound}</p>
       <Link
-        href="/app"
+        href={PHOTOS_HREF}
         className="press inline-flex h-11 items-center rounded-full bg-foreground px-6 text-sm font-semibold text-background hover:-translate-y-px hover:shadow-lift"
       >
         {IMAGE_DETAIL_COPY.back}

@@ -474,10 +474,12 @@ export function ScorePanel({
   image,
   previewUrl,
   onChangeFile,
+  compact = false,
 }: {
   image: ImageDto;
   previewUrl?: string | null;
   onChangeFile: () => void;
+  compact?: boolean;
 }) {
   const announcedFor = useRef<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
@@ -508,7 +510,7 @@ export function ScorePanel({
   return (
     <section
       aria-labelledby="score-panel-heading"
-      className="min-w-0 space-y-6"
+      className={compact ? "min-w-0 space-y-4" : "min-w-0 space-y-6"}
     >
       <p role="status" aria-live="polite" className="sr-only">
         {announcement}
@@ -523,7 +525,10 @@ export function ScorePanel({
           width={image.width ?? undefined}
           height={image.height ?? undefined}
           alt={SCORE_COPY.previewAlt}
-          className="block h-auto w-auto max-h-[24rem] max-w-full rounded-[3px] border-[10px] border-paper bg-paper object-contain shadow-strip"
+          className={[
+            "block h-auto w-auto max-w-full rounded-[3px] border-[10px] border-paper bg-paper object-contain shadow-strip",
+            compact ? "max-h-64" : "max-h-[24rem]",
+          ].join(" ")}
         />
       ) : null}
 
