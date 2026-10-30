@@ -12,10 +12,8 @@ export default async function AppPage() {
     redirect(signInPath("/app"));
   }
 
-  let preloaded: Preloaded<typeof api.queries.me.current> | null = null;
   let preloadedImages: Preloaded<typeof api.queries.images.list> | null = null;
   try {
-    preloaded = await preloadAuthQuery(api.queries.me.current, {});
     preloadedImages = await preloadAuthQuery(api.queries.images.list, {
       paginationOpts: { numItems: 12, cursor: null },
     });
@@ -26,9 +24,9 @@ export default async function AppPage() {
   }
 
   // `redirect` throws, so it must run outside the catch block.
-  if (preloaded === null || preloadedImages === null) {
+  if (preloadedImages === null) {
     redirect(signInPath("/app"));
   }
 
-  return <AppView preloaded={preloaded} preloadedImages={preloadedImages} />;
+  return <AppView preloadedImages={preloadedImages} />;
 }

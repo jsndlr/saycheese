@@ -103,3 +103,8 @@ export const SCORE_COPY = {
   announceCached: "This is a cached result.",
   signIn: "Sign in",
 } as const;
+export const USER_MENU_COPY = {
+  label: "Account menu",
+  photos: "Your photos",
+  signIn: "Sign in",
+} as const;

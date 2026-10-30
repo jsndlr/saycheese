@@ -10,6 +10,11 @@ vi.mock("convex/react", () => ({
   useConvexAuth: vi.fn(),
 }));
 
+let signingOut = false;
+vi.mock("@/lib/sign-out", () => ({
+  useSigningOut: () => signingOut,
+}));
+
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace }),
 }));
@@ -35,6 +40,7 @@ function gate(next = "/app/images/abc") {
 }
 
 beforeEach(() => {
+  signingOut = false;
   replace.mockReset();
   subscribed.mockReset();
 });
@@ -44,6 +50,16 @@ afterEach(() => {
 });
 
 describe("AuthGate", () => {
+  it("unmounts the subscribed children as soon as this client starts signing out", () => {
+    auth(false, true);
+    signingOut = true;
+
+    render(gate());
+
+    expect(screen.queryByText("subscribed child")).toBeNull();
+    expect(subscribed).not.toHaveBeenCalled();
+  });
+
   it("paints the fallback and mounts nothing while auth is loading", () => {
     auth(true, false);
 

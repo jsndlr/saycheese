@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 
 import { signInPath } from "@/lib/auth-path";
+import { useSigningOut } from "@/lib/sign-out";
 
 /**
  * The only place that decides what a signed-out client renders.
@@ -13,7 +14,8 @@ import { signInPath } from "@/lib/auth-path";
  * payload so the first frame is never blank. Once auth resolves, children
  * mount; if the session is lost later (expiry, sign-out in another tab) the
  * children unmount *before* their subscriptions can re-run without a token,
- * and the client is sent to sign-in with this path as `next`.
+ * and the client is sent to sign-in with this path as `next`. The same holds
+ * when this client starts the sign-out itself: children unmount first.
  */
 export function AuthGate({
   next,
@@ -26,6 +28,7 @@ export function AuthGate({
 }) {
   const router = useRouter();
   const { isAuthenticated, isLoading } = useConvexAuth();
+  const signingOut = useSigningOut();
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -36,7 +39,7 @@ export function AuthGate({
   if (isLoading) {
     return <>{fallback}</>;
   }
-  if (!isAuthenticated) {
+  if (!isAuthenticated || signingOut) {
     return null;
   }
   return <>{children}</>;

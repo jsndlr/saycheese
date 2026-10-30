@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { ModeToggle } from "./mode-toggle";
+import { UserMenu } from "./user-menu";
 
 const links = [
   { to: "/", label: "Home" },
@@ -31,7 +32,7 @@ export default function Header() {
             />
             <span className="font-display text-xl font-extrabold tracking-tight">saycheese</span>
           </Link>
-          <nav aria-label="Main" className="flex items-center gap-1 text-sm font-medium">
+          <nav aria-label="Main" className="hidden items-center gap-1 text-sm font-medium sm:flex">
             {links.map(({ to, label }) => {
               const active = isActive(pathname, to);
               return (
@@ -41,8 +42,6 @@ export default function Header() {
                   aria-current={active ? "page" : undefined}
                   className={[
                     "press relative rounded-full px-3.5 py-2 transition-colors",
-                    // The logo already links home, so phones keep one nav pill.
-                    to === "/" ? "hidden sm:inline-flex" : "",
                     active
                       ? "bg-foreground text-background"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -54,7 +53,10 @@ export default function Header() {
             })}
           </nav>
         </div>
-        <ModeToggle />
+        <div className="flex items-center gap-2">
+          <ModeToggle />
+          <UserMenu />
+        </div>
       </div>
     </header>
   );
