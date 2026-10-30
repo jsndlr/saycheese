@@ -4,11 +4,8 @@ import { ERROR_MESSAGES } from "@saycheese/core/errors";
 import { signInSchema } from "@saycheese/core/validation";
 import { Button } from "@saycheese/ui/components/button";
 import { useForm } from "@tanstack/react-form";
-import type { Route } from "next";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { toast } from "sonner";
 
 import { FormField } from "@/components/form-field";
 import { authClient } from "@/lib/auth-client";
@@ -19,7 +16,6 @@ import { firstFieldError } from "@/lib/form-error";
 import { revalidateShownError } from "@/lib/form-validation";
 
 export default function SignInForm({ nextPath }: { nextPath: string }) {
-  const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
 
   const form = useForm({
@@ -54,10 +50,11 @@ export default function SignInForm({ nextPath }: { nextPath: string }) {
         return;
       }
 
-      toast.success("Signed in");
+      // A full load, not a client push: the root layout and the Convex client
+      // must start from the new session's token. A soft navigation can keep the
+      // previous session's token, and every query then fails AUTH_REQUIRED.
       // safeNextPath has already restricted this to a same-origin relative path.
-      router.push(nextPath as Route);
-      router.refresh();
+      window.location.assign(nextPath);
     },
   });
 

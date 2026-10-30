@@ -4,11 +4,8 @@ import { ERROR_MESSAGES } from "@saycheese/core/errors";
 import { signUpSchema } from "@saycheese/core/validation";
 import { Button } from "@saycheese/ui/components/button";
 import { useForm } from "@tanstack/react-form";
-import type { Route } from "next";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { toast } from "sonner";
 
 import { FormField } from "@/components/form-field";
 import { authClient } from "@/lib/auth-client";
@@ -18,7 +15,6 @@ import { firstFieldError } from "@/lib/form-error";
 import { revalidateShownError } from "@/lib/form-validation";
 
 export default function SignUpForm({ nextPath }: { nextPath: string }) {
-  const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
 
   const form = useForm({
@@ -54,9 +50,8 @@ export default function SignUpForm({ nextPath }: { nextPath: string }) {
         return;
       }
 
-      toast.success("Account created");
-      router.push(nextPath as Route);
-      router.refresh();
+      // A full load for the same reason as sign-in: start from the new session's token.
+      window.location.assign(nextPath);
     },
   });
 

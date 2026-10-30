@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { USER_MENU_COPY } from "@/lib/copy";
 import { PHOTOS_HREF, handlePhotosLinkClick } from "@/lib/photos";
 
+import { AuthErrorBoundary } from "./auth-error-boundary";
 import { UserMenu } from "./user-menu";
 
 function isActive(pathname: string, to: string) {
@@ -46,7 +47,12 @@ export default function Header() {
             </Link>
           </nav>
         </div>
-        <UserMenu />
+        {/* The header lives in the root layout, so a stale-session query here must not reach the root error page. */}
+        <AuthErrorBoundary
+          fallback={<span aria-hidden="true" className="size-11 shrink-0 rounded-full bg-muted" />}
+        >
+          <UserMenu />
+        </AuthErrorBoundary>
       </div>
     </header>
   );

@@ -8,7 +8,7 @@ import type { Preloaded } from "convex/react";
 import { usePaginatedQuery, useQuery } from "convex/react";
 import type { Route } from "next";
 import Link from "next/link";
-import { useEffect, useRef } from "react";
+import { type CSSProperties, useEffect, useRef, useState } from "react";
 
 import { AuthGate } from "@/components/auth-gate";
 import { LocalTime, useTimeLabel } from "@/components/local-time";
@@ -55,38 +55,77 @@ function chipFor(image: ImageDto): { label: string; tone: ChipTone } {
   return { label: HISTORY_COPY.status.processing, tone: "active" };
 }
 
+/**
+ * Motion plays once per photo per page load. The preloaded and live lists are
+ * separate trees, so without this the auth handover (and every return from a
+ * detail page) would replay the entrance and the develop.
+ */
+const risen = new Set<string>();
+const developed = new Set<string>();
+
 function Thumbnail({ id, alt, score }: { id: ImageDto["id"]; alt: string; score: number | null }) {
   const file = useQuery(api.queries.images.fileUrl, { id, variant: "preview" });
 
   return (
-    <PrintImage alt={alt} score={score} url={file?.url ?? null} />
+    <PrintImage id={id} alt={alt} score={score} url={file?.url ?? null} />
   );
 }
 
 /**
  * The picture half of a print: a square crop with the score printed in its
- * corner, the same ink-and-lamp pairing as a frame on the landing strip.
+ * corner, the same ink-and-lamp pairing as a frame on the landing strip. The
+ * square shows a sheen until the picture has actually decoded, then the
+ * picture develops in.
  */
 function PrintImage({
+  id,
   alt,
   score,
   url,
 }: {
+  id: string;
   alt: string;
   score: number | null;
   url: string | null;
 }) {
+  const [seen] = useState(() => typeof window !== "undefined" && developed.has(id));
+  const [loaded, setLoaded] = useState(seen);
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  useEffect(() => {
+    // A cached picture can finish before hydration attaches onLoad.
+    if (imgRef.current?.complete && imgRef.current.naturalWidth > 0) {
+      setLoaded(true);
+    }
+  }, [url]);
+
+  useEffect(() => {
+    if (loaded) {
+      developed.add(id);
+    }
+  }, [id, loaded]);
+
   return (
-    <div className="relative aspect-square overflow-hidden rounded-[2px] bg-muted">
+    <div
+      className={[
+        "relative aspect-square overflow-hidden rounded-[2px]",
+        loaded ? "bg-muted" : "sheen",
+      ].join(" ")}
+    >
       {url ? (
         <img
+          ref={imgRef}
           src={url}
           width={256}
           height={256}
           alt={alt}
           loading="lazy"
           decoding="async"
-          className="size-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04] motion-reduce:transition-none"
+          onLoad={() => setLoaded(true)}
+          className={[
+            "size-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04] motion-reduce:transition-none",
+            loaded ? (seen ? "" : "develop") : "opacity-0",
+          ].join(" ")}
         />
       ) : null}
       {score !== null ? (
@@ -104,14 +143,23 @@ function PrintImage({
  * `fileUrl` subscription before auth resolves. The square is still reserved, so
  * the picture arriving later cannot shift the print.
  */
-function HistoryRow({ image, live }: { image: ImageDto; live: boolean }) {
+function HistoryRow({ image, live, index }: { image: ImageDto; live: boolean; index: number }) {
   const uploaded = useTimeLabel(image.createdAt, "relative");
   const chip = chipFor(image);
   const score = image.score;
   const value = score?.score ?? null;
+  const [rise] = useState(() => typeof window === "undefined" || !risen.has(image.id));
+
+  useEffect(() => {
+    risen.add(image.id);
+  }, [image.id]);
 
   return (
-    <li>
+    <li
+      className={rise ? "rise" : undefined}
+      // A short stagger across the first rows; later pages arrive together.
+      style={rise ? ({ "--rise-delay": `${Math.min(index, 9) * 55}ms` } as CSSProperties) : undefined}
+    >
       <Link
         href={`/app/images/${image.id}` as Route}
         className="press group block rounded-[3px] bg-card p-2 pb-3 shadow-lift transition-[transform,box-shadow] duration-300 ease-out hover:-translate-y-0.5 focus-visible:ring-4 focus-visible:ring-ring/50 focus-visible:outline-none"
@@ -119,7 +167,7 @@ function HistoryRow({ image, live }: { image: ImageDto; live: boolean }) {
         {live ? (
           <Thumbnail id={image.id} alt={HISTORY_COPY.thumbnailAlt(uploaded)} score={value} />
         ) : (
-          <PrintImage alt="" score={value} url={null} />
+          <PrintImage id={image.id} alt="" score={value} url={null} />
         )}
         <div className="mt-2.5 space-y-1.5 px-1">
           <div className="flex flex-wrap items-center gap-1.5">
@@ -147,11 +195,11 @@ function HistoryRow({ image, live }: { image: ImageDto; live: boolean }) {
 
 function SkeletonRow() {
   return (
-    <li aria-hidden="true" className="rounded-[3px] bg-card p-2 pb-3 shadow-lift motion-safe:animate-pulse">
-      <div className="aspect-square rounded-[2px] bg-muted" />
+    <li aria-hidden="true" className="rounded-[3px] bg-card p-2 pb-3 shadow-lift">
+      <div className="sheen aspect-square rounded-[2px]" />
       <div className="mt-2.5 space-y-2 px-1">
-        <div className="h-5 w-20 rounded-full bg-muted" />
-        <div className="h-3.5 w-14 rounded-full bg-muted" />
+        <div className="sheen h-5 w-20 rounded-full" />
+        <div className="sheen h-3.5 w-14 rounded-full" />
       </div>
     </li>
   );
@@ -163,8 +211,8 @@ const GRID =
 function HistoryRows({ images, live }: { images: ImageDto[]; live: boolean }) {
   return (
     <ul className={GRID}>
-      {images.map((image) => (
-        <HistoryRow key={image.id} image={image} live={live} />
+      {images.map((image, index) => (
+        <HistoryRow key={image.id} image={image} live={live} index={index} />
       ))}
     </ul>
   );

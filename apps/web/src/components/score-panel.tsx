@@ -470,6 +470,62 @@ function outcomeKey(image: ImageDto): string | null {
   return `${image.id}:${image.score.id}`;
 }
 
+/**
+ * The photo in its paper frame. The frame takes the photo's real proportions
+ * up front, shows a sheen until the picture decodes, then lets it develop in,
+ * so nothing below it shifts when it lands.
+ */
+function PrintPreview({
+  url,
+  width,
+  height,
+  maxHeight,
+}: {
+  url: string | null;
+  width: number;
+  height: number;
+  maxHeight: number;
+}) {
+  const [loaded, setLoaded] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  useEffect(() => {
+    // A cached picture can finish before hydration attaches onLoad.
+    const img = imgRef.current;
+    setLoaded(img !== null && img.complete && img.naturalWidth > 0);
+  }, [url]);
+
+  // 20px is the two 10px paper borders around the picture.
+  const frameWidth = `min(100%, ${Math.round((maxHeight - 20) * (width / height)) + 20}px)`;
+
+  return (
+    <div
+      className="overflow-hidden rounded-[3px] border-[10px] border-paper bg-paper shadow-strip"
+      style={{ width: frameWidth }}
+    >
+      <div
+        className={["relative w-full", loaded ? "" : "sheen"].join(" ")}
+        style={{ aspectRatio: `${width} / ${height}` }}
+      >
+        {url !== null ? (
+          <img
+            ref={imgRef}
+            src={url}
+            width={width}
+            height={height}
+            alt={SCORE_COPY.previewAlt}
+            onLoad={() => setLoaded(true)}
+            className={[
+              "absolute inset-0 size-full object-contain",
+              loaded ? "develop" : "opacity-0",
+            ].join(" ")}
+          />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export function ScorePanel({
   image,
   previewUrl,
@@ -504,8 +560,10 @@ export function ScorePanel({
     setAnnouncement(next);
   }, [image]);
 
+  // The frame is sized from the stored dimensions, so it can hold its place
+  // (with a sheen) before the URL or the picture itself arrives.
   const showPreview =
-    previewUrl != null && image.width !== null && image.height !== null;
+    previewUrl !== undefined && image.width !== null && image.height !== null;
 
   return (
     <section
@@ -519,16 +577,12 @@ export function ScorePanel({
         {SCORE_COPY.panelHeading}
       </h2>
 
-      {showPreview ? (
-        <img
-          src={previewUrl}
-          width={image.width ?? undefined}
-          height={image.height ?? undefined}
-          alt={SCORE_COPY.previewAlt}
-          className={[
-            "block h-auto w-auto max-w-full rounded-[3px] border-[10px] border-paper bg-paper object-contain shadow-strip",
-            compact ? "max-h-64" : "max-h-[24rem]",
-          ].join(" ")}
+      {showPreview && image.width !== null && image.height !== null ? (
+        <PrintPreview
+          url={previewUrl ?? null}
+          width={image.width}
+          height={image.height}
+          maxHeight={compact ? 256 : 384}
         />
       ) : null}
 

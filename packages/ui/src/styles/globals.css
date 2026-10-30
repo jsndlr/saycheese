@@ -163,6 +163,44 @@
   animation: lamp-glow 2.4s ease-in-out infinite;
 }
 
+/* A print developing: the picture comes up out of a bright, soft wash. */
+@keyframes develop {
+  from {
+    opacity: 0;
+    filter: brightness(1.7) saturate(0.2) blur(6px);
+  }
+  to {
+    opacity: 1;
+    filter: none;
+  }
+}
+
+.develop {
+  animation: develop 0.9s var(--ease-out-quart) both;
+}
+
+/* Loading placeholder: a slow sheen across the muted surface. */
+@keyframes sheen {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+
+.sheen {
+  background-color: var(--muted);
+  background-image: linear-gradient(
+    100deg,
+    transparent 30%,
+    color-mix(in oklch, var(--background) 70%, transparent) 50%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  animation: sheen 1.6s ease-in-out infinite;
+}
+
 /* Sections rise into view as they scroll in; browsers without scroll timelines just show them. */
 @supports (animation-timeline: view()) {
   .reveal {
@@ -220,7 +258,9 @@
   .frame-flash,
   .frame-content,
   .score-land,
-  .lamp {
+  .lamp,
+  .develop,
+  .sheen {
     animation: none;
   }
   .press,

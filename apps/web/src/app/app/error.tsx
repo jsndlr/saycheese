@@ -1,10 +1,10 @@
 "use client";
 
 import { Button } from "@saycheese/ui/components/button";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 
-import { signInPath } from "@/lib/auth-path";
+import { recoverFromAuthError } from "@/lib/auth-recovery";
 import { toUiError } from "@/lib/errors";
 
 export default function AppError({
@@ -14,15 +14,15 @@ export default function AppError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  const router = useRouter();
   const pathname = usePathname();
   const authRequired = toUiError(error).code === "AUTH_REQUIRED";
 
   useEffect(() => {
     if (authRequired) {
-      router.replace(signInPath(pathname));
+      // A client-side replace would keep the stale token; recovery reloads first.
+      recoverFromAuthError(pathname);
     }
-  }, [authRequired, pathname, router]);
+  }, [authRequired, pathname]);
 
   if (authRequired) {
     return (
