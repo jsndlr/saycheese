@@ -83,6 +83,7 @@ export const SCORE_COPY = {
   provider: {
     rekognition: "Amazon Rekognition",
     vision: "Google Cloud Vision",
+    deepseek: "DeepSeek",
     stub: "Stub provider",
   },
   scoredBy: (provider: string) => `Scored by ${provider}`,

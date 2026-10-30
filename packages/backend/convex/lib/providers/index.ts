@@ -1,3 +1,4 @@
+import { createDeepSeekProvider } from "./deepseek";
 import { createRekognitionProvider } from "./rekognition";
 import { stubProvider } from "./stub";
 import { ProviderError, type ProviderName, type SmileProvider } from "./types";
@@ -16,6 +17,9 @@ export type ProviderEnv = {
   AWS_ACCESS_KEY_ID?: string;
   AWS_SECRET_ACCESS_KEY?: string;
   GOOGLE_APPLICATION_CREDENTIALS_JSON?: string;
+  DEEPSEEK_API_KEY?: string;
+  DEEPSEEK_MODEL?: string;
+  DEEPSEEK_BASE_URL?: string;
 };
 
 export function providerFor(name: ProviderName, env: ProviderEnv): SmileProvider {
@@ -35,6 +39,20 @@ export function providerFor(name: ProviderName, env: ProviderEnv): SmileProvider
         region: AWS_REGION,
         accessKeyId: AWS_ACCESS_KEY_ID,
         secretAccessKey: AWS_SECRET_ACCESS_KEY,
+      });
+    }
+    case "deepseek": {
+      if (!env.DEEPSEEK_API_KEY) {
+        throw new ProviderError(
+          "fatal",
+          "missing_credentials",
+          "SMILE_PROVIDER=deepseek requires DEEPSEEK_API_KEY.",
+        );
+      }
+      return createDeepSeekProvider({
+        apiKey: env.DEEPSEEK_API_KEY,
+        model: env.DEEPSEEK_MODEL,
+        baseUrl: env.DEEPSEEK_BASE_URL,
       });
     }
     case "vision": {
@@ -93,6 +111,8 @@ export function providerOrder(env: ProviderEnv): readonly ProviderName[] {
       return ["rekognition", "vision"];
     case "vision":
       return ["vision"];
+    case "deepseek":
+      return ["deepseek"];
     case "stub":
       return ["stub"];
     default: {

@@ -12,7 +12,7 @@ import {
 import type { ProviderFace, ProviderResult } from "./scoring";
 
 type Meta = Parameters<typeof mapProviderResult>[1];
-type NonVisionMeta = Extract<Meta, { provider: "rekognition" | "stub" }>;
+type NonVisionMeta = Exclude<Meta, { provider: "vision" }>;
 type VisionMeta = Extract<Meta, { provider: "vision" }>;
 
 function face(overrides: Partial<ProviderFace> = {}): ProviderFace {

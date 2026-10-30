@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const providerSchema = z.enum(["stub", "rekognition", "vision"]);
+const providerSchema = z.enum(["stub", "rekognition", "vision", "deepseek"]);
 const logLevelSchema = z.enum(["debug", "info", "warn", "error"]);
 
 const envSchema = z
@@ -34,6 +34,10 @@ const envSchema = z
     AWS_ACCESS_KEY_ID: z.string().optional(),
     AWS_SECRET_ACCESS_KEY: z.string().optional(),
     GOOGLE_APPLICATION_CREDENTIALS_JSON: z.string().optional(),
+    DEEPSEEK_API_KEY: z.string().optional(),
+    DEEPSEEK_MODEL: z.string().optional(),
+    // Any OpenAI-compatible endpoint serving a DeepSeek vision model (a reseller, say).
+    DEEPSEEK_BASE_URL: z.string().url().optional(),
   })
   .superRefine((value, ctx) => {
     if (value.SMILE_PROVIDER === "rekognition") {
@@ -47,6 +51,14 @@ const envSchema = z
           message: `Missing required keys for SMILE_PROVIDER=rekognition: ${missing.join(", ")}.`,
         });
       }
+    }
+
+    if (value.SMILE_PROVIDER === "deepseek" && !value.DEEPSEEK_API_KEY) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["DEEPSEEK_API_KEY"],
+        message: "Required when SMILE_PROVIDER=deepseek.",
+      });
     }
 
     if (value.SMILE_PROVIDER === "vision") {

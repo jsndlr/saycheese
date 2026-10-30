@@ -11,7 +11,7 @@ export type SmileScore = {
   faceCount: number;
   status: ScoreStatus;
   reason: string;
-  provider: "rekognition" | "vision" | "stub";
+  provider: "rekognition" | "vision" | "deepseek" | "stub";
   providerModel: string;
   configVersion: string;
   latencyMs: number;
@@ -73,7 +73,7 @@ export function pickDominantFace(faces: readonly ProviderFace[]): ProviderFace |
 
 type ProviderMeta =
   | {
-      provider: "rekognition" | "stub";
+      provider: "rekognition" | "deepseek" | "stub";
       providerModel: string;
       cached: boolean;
     }

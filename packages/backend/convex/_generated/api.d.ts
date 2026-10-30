@@ -30,6 +30,7 @@ import type * as lib_imageEncoding from "../lib/imageEncoding.js";
 import type * as lib_imageValidation from "../lib/imageValidation.js";
 import type * as lib_providerImage from "../lib/providerImage.js";
 import type * as lib_providers_base64 from "../lib/providers/base64.js";
+import type * as lib_providers_deepseek from "../lib/providers/deepseek.js";
 import type * as lib_providers_index from "../lib/providers/index.js";
 import type * as lib_providers_rekognition from "../lib/providers/rekognition.js";
 import type * as lib_providers_stub from "../lib/providers/stub.js";
@@ -75,6 +76,7 @@ declare const fullApi: ApiFromModules<{
   "lib/imageValidation": typeof lib_imageValidation;
   "lib/providerImage": typeof lib_providerImage;
   "lib/providers/base64": typeof lib_providers_base64;
+  "lib/providers/deepseek": typeof lib_providers_deepseek;
   "lib/providers/index": typeof lib_providers_index;
   "lib/providers/rekognition": typeof lib_providers_rekognition;
   "lib/providers/stub": typeof lib_providers_stub;

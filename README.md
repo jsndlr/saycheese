@@ -136,6 +136,20 @@ Plan 6.3 uses `@convex-dev/rate-limiter` (`packages/backend/convex/lib/rateLimit
 
 ## Smile scoring providers
 
+### DeepSeek (vision model, no AWS or Google account)
+
+```
+SMILE_PROVIDER=deepseek
+DEEPSEEK_API_KEY=...                         # required
+DEEPSEEK_MODEL=deepseek-flash                # optional, this is the default
+DEEPSEEK_BASE_URL=https://api.deepseek.com   # optional: any OpenAI-compatible endpoint
+```
+
+A multimodal chat model is asked for a strict JSON description of each face (area, smiling, confidences, sharpness); the reply is validated and clamped, and core owns the scoring rules. It runs with `temperature: 0` and thinking disabled (about 2 s instead of 6 s on a reseller that returns reasoning). There is no fallback provider in this mode. The model's judgement is not a measurement, so treat scores as a fun estimate; `DEEPSEEK_COST_MICROS_PER_IMAGE` is a labelled placeholder, not a verified price.
+
+Verified 2026-10-30 against Refuseless (`https://api.refuseless.com/v1`, model `deepseek-v4.1-flash-fast`): a smiling portrait scored 97, a plain image returned no faces.
+
+
 The repository defaults to the deterministic stub (`SMILE_PROVIDER=stub`); it needs no network or credentials. AWS Rekognition is opt-in:
 
 ```bash

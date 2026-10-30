@@ -6,7 +6,7 @@ import type { ProviderResult } from "@saycheese/core/scoring";
  * the selection logic run anywhere Convex does.
  */
 
-export type ProviderName = "rekognition" | "vision" | "stub";
+export type ProviderName = "rekognition" | "vision" | "deepseek" | "stub";
 
 export type SmileProviderInput = {
   bytes: Uint8Array;

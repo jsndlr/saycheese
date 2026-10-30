@@ -29,6 +29,7 @@ export const scoreStatus = v.union(
 export const provider = v.union(
   v.literal("rekognition"),
   v.literal("vision"),
+  v.literal("deepseek"),
   v.literal("stub"),
 );
 

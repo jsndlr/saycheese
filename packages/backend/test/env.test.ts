@@ -70,6 +70,13 @@ describe("parseEnv", () => {
     ).toThrow(/GOOGLE_APPLICATION_CREDENTIALS_JSON/);
   });
 
+  it("requires an API key for the deepseek provider", () => {
+    expect(() => parseEnv({ ...REQUIRED, SMILE_PROVIDER: "deepseek" })).toThrow(/DEEPSEEK_API_KEY/);
+    expect(
+      parseEnv({ ...REQUIRED, SMILE_PROVIDER: "deepseek", DEEPSEEK_API_KEY: "k" }).SMILE_PROVIDER,
+    ).toBe("deepseek");
+  });
+
   it("requires vision credentials for the vision provider", () => {
     expect(() => parseEnv({ ...REQUIRED, SMILE_PROVIDER: "vision" })).toThrow(
       /GOOGLE_APPLICATION_CREDENTIALS_JSON/,
